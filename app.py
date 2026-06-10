@@ -1,566 +1,581 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
+import json
 from pathlib import Path
+import pandas as pd
+import streamlit as st
+import streamlit.components.v1 as components
 
-st.set_page_config(page_title="DC-Resource Intelligence Platform", layout="wide", initial_sidebar_state="expanded")
+# 1. ตั้งค่าหน้าเพจ Streamlit ให้กว้างเต็มจอและซ่อนองค์ประกอบเริ่มต้น
+st.set_page_config(
+    page_title="DC-Resource Intelligence Platform",
+    page_icon="🛰️",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-CSV_NAME = "geosentinel_monthly_dashboard_data.csv"
+DATA_FILE = Path("geosentinel_monthly_dashboard_data.csv")
 
-# -----------------------------
-# Helper functions
-# -----------------------------
-def clean_name(name: str) -> str:
-    return str(name).replace("_", " ")
+@st.cache_data
+def load_data():
+    if not DATA_FILE.exists():
+        st.error("ไม่พบไฟล์ geosentinel_monthly_dashboard_data.csv กรุณาวางไฟล์ไว้ในโฟลเดอร์เดียวกับสคริปต์นี้")
+        st.stop()
+    df = pd.read_csv(DATA_FILE)
+    
+    # แปลงชื่อคอลัมน์และเตรียมความพร้อมข้อมูล
+    df["year_month"] = df["year_month"].astype(str)
+    df["Year"] = df["year_month"].str.slice(0, 4)
+    df["Display Name"] = df["data_center_name"].astype(str).str.replace("_", " ", regex=False)
+    df = df.sort_values(["data_center_name", "year_month"])
+    return df
 
-def level_color(level: str) -> str:
-    level = str(level).lower()
-    if "critical" in level:
-        return "#dc2626"
-    if "concern" in level or "high" in level:
-        return "#f97316"
-    if "watch" in level or "moderate" in level:
-        return "#facc15"
-    return "#22c55e"
+df = load_data()
 
-def chip_class(level: str) -> str:
-    level = str(level).lower()
-    if "critical" in level:
-        return "chip critical"
-    if "concern" in level or "high" in level:
-        return "chip concern"
-    if "watch" in level or "moderate" in level:
-        return "chip watch"
-    return "chip stable"
+# แปลงข้อมูลเป็น JSON เพื่อส่งไปทำงานบน Frontend ฝั่ง HTML/JS
+records_json = json.dumps(df.to_dict("records"), ensure_ascii=False)
+years_json = json.dumps(sorted(df["Year"].unique().tolist()), ensure_ascii=False)
+months_json = json.dumps(sorted(df["year_month"].unique().tolist()), ensure_ascii=False)
+latest_year = sorted(df["Year"].unique().tolist())[-1]
+latest_month = sorted(df[df["Year"] == latest_year]["year_month"].unique().tolist())[-1]
 
-def level_from_eci(value: float) -> str:
-    if value >= 1.0:
-        return "Critical"
-    if value >= 0.6:
-        return "Concern"
-    if value >= 0.3:
-        return "Watch"
-    return "Stable"
-
-def level_from_ess(value: float) -> str:
-    if value >= 70:
-        return "Critical"
-    if value >= 50:
-        return "Concern"
-    if value >= 30:
-        return "Watch"
-    return "Stable"
-
-def metric_card(title, value, subtitle, icon, tone="blue"):
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div>
-                <div class="metric-title">{title}</div>
-                <div class="metric-value">{value}</div>
-                <div class="metric-subtitle">{subtitle}</div>
-            </div>
-            <div class="metric-icon {tone}">{icon}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def small_card(label, value, level=None, note=""):
-    tag = "" if level is None else f'<span class="{chip_class(level)}">{level}</span>'
-    st.markdown(
-        f"""
-        <div class="small-card">
-            <div class="small-label">{label}</div>
-            <div class="small-value">{value}</div>
-            {tag}
-            <div class="small-note">{note}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def section_header(title, subtitle=""):
-    st.markdown(
-        f"""
-        <div class="section-card section-head">
-            <div class="section-title">{title}</div>
-            <div class="section-subtitle">{subtitle}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def make_geo_map(df, value_col, title, color_scale):
-    fig = px.scatter_geo(
-        df,
-        lat="latitude",
-        lon="longitude",
-        color=value_col,
-        size=value_col,
-        hover_name="Display Name",
-        hover_data={
-            value_col: ":.2f",
-            "latitude": False,
-            "longitude": False,
-            "Risk Level": True,
-        },
-        scope="usa",
-        projection="albers usa",
-        color_continuous_scale=color_scale,
-        size_max=22,
-    )
-    fig.update_geos(
-        showland=True,
-        landcolor="#f8fafc",
-        showlakes=True,
-        lakecolor="#dbeafe",
-        showsubunits=True,
-        subunitcolor="#e5e7eb",
-        bgcolor="rgba(0,0,0,0)",
-    )
-    fig.update_layout(
-        height=285,
-        margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        coloraxis_colorbar=dict(title="Score", thickness=12, len=0.72),
-    )
-    return fig
-
-def line_chart(df, y_col, title, color):
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df["year_month"],
-            y=df[y_col],
-            mode="lines+markers",
-            line=dict(width=3, color=color),
-            marker=dict(size=6),
-            fill="tozeroy",
-            fillcolor="rgba(59,130,246,0.12)" if color == "#2563eb" else "rgba(220,38,38,0.12)",
-        )
-    )
-    fig.update_layout(
-        height=220,
-        margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(showgrid=True, gridcolor="#eef2f7", tickfont=dict(size=10)),
-        yaxis=dict(showgrid=True, gridcolor="#eef2f7", tickfont=dict(size=10)),
-    )
-    return fig
-
-def render_table(df, score_col, level_func, title):
-    table = df.sort_values(score_col, ascending=False).head(5).copy()
-    rows = ""
-    for i, row in enumerate(table.itertuples(), 1):
-        score = getattr(row, score_col)
-        level = level_func(float(score))
-        rows += f"""
-        <tr>
-            <td>{i}</td>
-            <td>{clean_name(getattr(row, 'data_center_name'))}</td>
-            <td>{float(score):.2f}</td>
-            <td><span class=\"{chip_class(level)}\">{level}</span></td>
-        </tr>
-        """
-    st.markdown(
-        f"""
-        <div class="section-card table-card">
-            <div class="table-title">{title}</div>
-            <table class="nice-table">
-                <thead><tr><th>Rank</th><th>Data Center</th><th>Score</th><th>Level</th></tr></thead>
-                <tbody>{rows}</tbody>
-            </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# -----------------------------
-# CSS: clone-like horizontal dashboard
-# -----------------------------
+# ซ่อน Streamlit Elements เพื่อให้ผลลัพธ์ UI คุมหน้าจอได้สมบูรณ์แบบตามรูปภาพ
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-
-    * { font-family: 'Inter', sans-serif; }
-    html, body, [data-testid="stAppViewContainer"] { background:#f3f7fb; }
-    [data-testid="stHeader"] { display:none; }
-    [data-testid="stToolbar"] { display:none; }
-    [data-testid="stDecoration"] { display:none; }
-    [data-testid="stStatusWidget"] { display:none; }
-    [data-testid="stMainBlockContainer"] {
-        max-width: 100% !important;
-        padding: 22px 26px 24px 26px !important;
-    }
-
-    [data-testid="stSidebar"] { background:#041b34; border-right: 1px solid #0f2f55; min-width: 230px !important; max-width: 230px !important; }
-    [data-testid="stSidebar"] > div { padding: 26px 18px; }
-    [data-testid="stSidebar"] * { color:#eaf3ff; }
-
-    .brand { margin-top: 10px; margin-bottom: 34px; }
-    .brand-title { font-size: 24px; line-height:1.08; font-weight:900; color:#ffffff; }
-    .brand-sub { font-size: 12px; color:#b9c9de; line-height:1.55; margin-top:12px; font-weight:600; }
-    .nav-title { font-size: 12px; letter-spacing:2px; color:#94a8c0; font-weight:900; margin: 0 0 10px 0; }
-    div[data-testid="stSidebar"] button {
-        width: 100%; border-radius: 13px !important; height: 46px !important;
-        background: transparent !important; border: 1px solid rgba(148,168,192,.22) !important;
-        color:#eaf3ff !important; font-weight:800 !important; text-align:left !important;
-        margin-bottom: 8px !important;
-    }
-    div[data-testid="stSidebar"] button:hover { background:#0b5bd3 !important; border-color:#0b5bd3 !important; }
-    .source-box { position:fixed; bottom:20px; left:18px; width:194px; border:1px solid rgba(148,168,192,.32); border-radius:14px; padding:14px; background:rgba(255,255,255,.03); }
-    .source-title { font-size:12px; font-weight:900; color:#fff; }
-    .source-text { font-size:11px; color:#b9c9de; line-height:1.55; margin-top:8px; }
-
-    .hero-card {
-        background:#fff; border:1px solid #dbe6f2; border-radius:20px; padding:26px 28px;
-        box-shadow:0 18px 45px rgba(15,45,75,.08); min-height:112px;
-    }
-    .hero-title { font-size:30px; font-weight:900; color:#07122c; letter-spacing:-1.1px; white-space:nowrap; }
-    .hero-sub { color:#607187; font-size:14px; font-weight:700; margin-top:12px; }
-
-    .filter-wrap { background:transparent; padding-top: 4px; }
-    div[data-testid="stButton"] button {
-        border-radius:14px !important; border:1px solid #d7e5f4 !important;
-        background:#ffffff !important; color:#2563eb !important; font-weight:800 !important;
-        min-height:40px !important; box-shadow:0 8px 24px rgba(15,45,75,.05);
-    }
-    div[data-testid="stButton"] button:hover { background:#eaf3ff !important; border-color:#93c5fd !important; }
-    div[data-testid="stSelectbox"] label, div[data-testid="stRadio"] label { color:#50617a !important; font-weight:800 !important; }
-    div[data-baseweb="select"] > div { border-radius:12px !important; background:#f6f8fb !important; border:0 !important; min-height:44px; }
-
-    .metric-card {
-        height:116px; background:#fff; border:1px solid #dbe6f2; border-radius:16px; padding:18px;
-        display:flex; justify-content:space-between; overflow:hidden; box-shadow:0 12px 30px rgba(15,45,75,.06);
-    }
-    .metric-title { color:#53677f; font-weight:900; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; line-height:1.5; }
-    .metric-value { color:#07122c; font-size:30px; line-height:1; font-weight:900; margin-top:12px; }
-    .metric-subtitle { color:#8ba0b8; font-size:12px; font-weight:700; margin-top:12px; line-height:1.35; }
-    .metric-icon { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:23px; font-weight:900; flex:0 0 auto; }
-    .metric-icon.blue { background:#e7f1ff; color:#2563eb; }
-    .metric-icon.red { background:#ffe4e9; color:#e11d48; }
-    .metric-icon.orange { background:#ffedd5; color:#f97316; }
-    .metric-icon.purple { background:#ede9fe; color:#7c3aed; }
-
-    .section-card { background:#fff; border:1px solid #dbe6f2; border-radius:16px; box-shadow:0 12px 30px rgba(15,45,75,.055); }
-    .section-head { padding:16px 18px; margin-bottom:-2px; border-bottom-left-radius:0; border-bottom-right-radius:0; }
-    .section-title { color:#07122c; font-size:16px; font-weight:900; }
-    .section-subtitle { color:#607187; font-size:12px; font-weight:700; margin-top:8px; }
-    .map-box { background:#fff; border:1px solid #dbe6f2; border-top:0; border-radius:0 0 16px 16px; padding: 0 8px 10px 8px; margin-bottom:14px; box-shadow:0 12px 30px rgba(15,45,75,.055); }
-
-    .table-card { padding:16px 18px; }
-    .table-title { color:#07122c; font-size:14px; font-weight:900; margin-bottom:10px; }
-    .nice-table { width:100%; border-collapse:collapse; font-size:12px; }
-    .nice-table th { text-align:left; color:#53677f; font-size:11px; padding:9px 6px; border-bottom:1px solid #e5edf5; }
-    .nice-table td { color:#07122c; padding:10px 6px; border-bottom:1px solid #eef2f7; font-weight:650; }
-    .chip { display:inline-block; border-radius:9px; padding:5px 9px; font-size:11px; font-weight:900; }
-    .critical { background:#fee2e2; color:#dc2626; }
-    .concern { background:#ffedd5; color:#ea580c; }
-    .watch { background:#fef3c7; color:#b45309; }
-    .stable { background:#dcfce7; color:#16a34a; }
-
-    .detail-panel { background:#fff; border:1px solid #dbe6f2; border-radius:18px; padding:18px; box-shadow:0 16px 35px rgba(15,45,75,.06); }
-    .detail-title { color:#07122c; font-size:20px; font-weight:900; margin-bottom:5px; }
-    .crumb { color:#6b7c93; font-size:11px; font-weight:800; margin-bottom:16px; }
-    .small-card { background:#fff; border:1px solid #dbe6f2; border-radius:14px; padding:16px; min-height:110px; }
-    .small-label { color:#53677f; font-weight:900; letter-spacing:1px; font-size:11px; text-transform:uppercase; }
-    .small-value { color:#07122c; font-size:28px; font-weight:900; margin:12px 0 8px 0; }
-    .small-note { color:#7c8ca3; font-size:11px; font-weight:700; margin-top:8px; line-height:1.35; }
-
-    .alert-box { background:#fff1f2; border:1px solid #fecdd3; border-radius:14px; padding:16px; display:flex; gap:16px; align-items:center; }
-    .alert-icon { width:56px; height:56px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:900; }
-    .alert-title { font-weight:900; color:#07122c; font-size:14px; }
-    .alert-text { color:#26364e; font-size:12px; line-height:1.55; font-weight:650; margin-top:7px; }
-    .risk-badge { background:#dc2626; color:#fff; display:inline-block; padding:10px 14px; border-radius:8px; font-size:18px; font-weight:900; margin-top:6px; }
-    .info-box { background:#fff; border:1px solid #dbe6f2; border-radius:14px; padding:15px; min-height:132px; }
-    .info-title { font-weight:900; color:#07122c; font-size:13px; margin-bottom:8px; }
-    .info-text, .info-list { color:#334155; font-size:12px; line-height:1.65; font-weight:650; }
-
-    div[data-testid="column"] { padding-left: 0.42rem !important; padding-right: 0.42rem !important; }
-    .block-container div[data-testid="stVerticalBlock"] > div { gap: 0.75rem; }
+      header[data-testid="stHeader"] {display:none!important;}
+      #MainMenu, footer {visibility:hidden!important;}
+      div[data-testid="stToolbar"] {display:none!important;}
+      .block-container {padding:0!important; max-width:100%!important;}
+      iframe {display:block; border:0!important;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# -----------------------------
-# Data load
-# -----------------------------
-@st.cache_data
-def load_data():
-    path = Path(CSV_NAME)
-    if not path.exists():
-        st.error(f"ไม่พบไฟล์ {CSV_NAME} กรุณาวางไฟล์ CSV ไว้ในโฟลเดอร์เดียวกับไฟล์ Python นี้")
-        st.stop()
-    data = pd.read_csv(path)
-    data["year_month"] = data["year_month"].astype(str)
-    data["Year"] = data["year_month"].str[:4]
-    data["Display Name"] = data["data_center_name"].apply(clean_name)
-    data["Risk Level"] = data["risk_level"].astype(str).str.title()
-    return data
+# 2. HTML / CSS / JavaScript Template ปรับแต่งดีไซน์ตามตัวอย่างรูปภาพระดับ Pixel-Perfect
+html_template = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #061A2F; --navy2: #03111F; --blue: #1268E8; --text: #08142D; --muted: #51627A;
+  --line: #E8EEF5; --bg: #F5F8FC; --card: #FFFFFF; --red: #E63145; --orange: #F97316;
+  --yellow: #FACC15; --green: #22C55E; --purple: #6D42E8; --softBlue: #E8F3FF;
+}
+* { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); overflow-x: auto; }
 
-df = load_data()
+/* โครงสร้างหลัก 3 คอลัมน์ ตามภาพตัวอย่าง */
+.app { width: 1620px; min-height: 1080px; display: grid; grid-template-columns: 200px 780px 640px; background: var(--bg); }
 
-# -----------------------------
-# Session state
-# -----------------------------
-if "page" not in st.session_state:
-    st.session_state.page = "Overview"
-if "year" not in st.session_state:
-    st.session_state.year = sorted(df["Year"].unique())[-1]
-if "month" not in st.session_state:
-    st.session_state.month = sorted(df.loc[df["Year"] == st.session_state.year, "year_month"].unique())[-1]
-if "risk" not in st.session_state:
-    st.session_state.risk = "All"
+/* คอลัมน์ที่ 1: Sidebar (ซ้าย) */
+.sidebar { background: linear-gradient(180deg, var(--navy), var(--navy2)); padding: 24px 16px; color: white; position: relative; border-right: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.logo { width: 28px; height: 28px; border-radius: 8px; background: #0EBA74; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: white; }
+.brand-title { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.brand-sub { font-size: 11px; color: #8FA0B5; margin-bottom: 32px; line-height: 1.4; }
+.nav { display: flex; flex-direction: column; gap: 8px; }
+.nav-btn { height: 40px; border: 0; background: transparent; color: #A3B8CC; border-radius: 8px; padding: 0 12px; text-align: left; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s; }
+.nav-btn.active, .nav-btn:hover { background: #0F2942; color: white; }
+.nav-btn.active { background: #1268E8; }
+.source-box { position: absolute; left: 16px; right: 16px; bottom: 24px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; font-size: 11px; color: #8FA0B5; line-height: 1.5; }
 
-# -----------------------------
-# Sidebar
-# -----------------------------
-with st.sidebar:
-    st.markdown(
-        """
-        <div class="brand">
-            <div class="brand-title">🛡️ DC-Resource<br>Intelligence</div>
-            <div class="brand-sub">GeoAI Environmental Monitoring<br>for Data Centers</div>
+/* คอลัมน์ที่ 2: Overview (กลาง) */
+.main { padding: 24px; border-right: 1px solid var(--line); overflow-y: auto; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+.header-text h1 { font-size: 24px; font-weight: 800; margin: 0 0 4px 0; letter-spacing: -0.02em; }
+.header-text p { font-size: 13px; margin: 0; color: var(--muted); }
+.date-box { height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; gap: 8px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.filter-pop { display: none; position: absolute; top: 44px; right: 0; width: 220px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 16px; z-index: 1000; }
+.date-box.open .filter-pop { display: block; }
+.f-title { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; margin-bottom: 6px; }
+.pop-select { width: 100%; border: 1px solid var(--line); border-radius: 6px; height: 32px; padding: 0 8px; font-size: 12px; margin-bottom: 12px; }
+
+/* KPIs Grid */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 6px rgba(9,36,70,0.02); }
+.kpi-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.kpi-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.kpi-value { font-size: 24px; font-weight: 800; margin-top: 2px; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* Maps & Tables */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 2px 6px rgba(9,36,70,0.02); }
+.card-title { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.card-sub { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+.mapbox { height: 240px; border-radius: 8px; background: #EBF3FC; position: relative; overflow: hidden; border: 1px solid var(--line); }
+.us-shape { position: absolute; inset: 10px; background: #FFFFFF; clip-path: polygon(10% 30%, 25% 15%, 45% 20%, 65% 10%, 90% 20%, 95% 50%, 85% 80%, 60% 75%, 40% 85%, 15% 70%); border-radius: 20px; opacity: 0.7; }
+.map-point { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; transform: translate(-50%, -50%); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.map-point.active { ring: 3px solid var(--blue); scale: 1.3; z-index: 10; }
+.map-legend { position: absolute; left: 10px; bottom: 10px; background: white; padding: 6px 10px; border-radius: 6px; font-size: 9px; border: 1px solid var(--line); line-height: 1.4; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 8px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); font-size: 11px; }
+td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
+.badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; display: inline-block; }
+.badge.Critical { background: #FFE5E7; color: #D92D20; }
+.badge.Concern { background: #FFEAD5; color: #E05300; }
+.badge.Watch { background: #FEF3C7; color: #B57F1E; }
+.badge.Stable, .badge.Low { background: #ECFDF3; color: #039855; }
+
+/* คอลัมน์ที่ 3: Hotspot & Alerts Detail (ขวา) */
+.right-panel { padding: 24px; overflow-y: auto; height: 1080px; background: white; }
+.r-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.r-title { font-size: 16px; font-weight: 800; }
+.r-crumb { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.select-box { height: 32px; border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; font-size: 12px; font-weight: 600; }
+
+.mini-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.2fr; gap: 8px; margin-bottom: 16px; }
+.mini-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--bg); }
+.mini-title { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.mini-value { font-size: 20px; font-weight: 800; margin: 4px 0; }
+
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.chart-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.chart-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+.spark-svg { width: 100%; height: 100px; }
+
+/* Alert Boxes */
+.alert-banner { background: #FFF5F5; border: 1px solid #FEE4E4; border-radius: 10px; padding: 14px; display: flex; gap: 12px; align-items: flex-start; margin-bottom: 20px; }
+.alert-icon-box { width: 36px; height: 36px; border-radius: 50%; background: var(--red); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
+.alert-banner-text { flex: 1; font-size: 12px; line-height: 1.5; }
+.risk-badge-large { background: var(--red); color: white; padding: 6px 12px; border-radius: 6px; font-weight: 800; text-align: center; font-size: 14px; margin-top: 4px; }
+
+.section-divider { font-size: 13px; font-weight: 700; margin: 24px 0 12px 0; display: flex; align-items: center; gap: 8px; }
+.sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.info-block { border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 11px; line-height: 1.5; }
+.info-block-title { font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+
+/* Email Subscribe */
+.email-box { display: flex; gap: 6px; margin-top: 8px; }
+.email-input { height: 30px; flex: 1; border: 1px solid var(--line); border-radius: 4px; padding: 0 8px; font-size: 11px; }
+.email-btn { background: var(--blue); color: white; border: 0; border-radius: 4px; padding: 0 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+.footer-bar { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">🛰️</div>
+      <div class="brand-title">GeoSentinel AI</div>
+    </div>
+    <div class="brand-sub">Environmental<br/>Early Warning System</div>
+    <div class="nav">
+      <button class="nav-btn active">📊 Overview</button>
+      <button class="nav-btn">🎯 Hotspot Detail</button>
+      <button class="nav-btn">🔔 Alerts</button>
+      <button class="nav-btn">🏢 Data Centers</button>
+      <button class="nav-btn">📈 Trends</button>
+      <button class="nav-btn">📄 Reports</button>
+      <button class="nav-btn">ℹ️ About</button>
+    </div>
+    <div class="source-box">
+      <b>Data Source</b><br/>
+      Google Earth Engine<br/>
+      (2019 – 2026)
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="header">
+      <div class="header-text">
+        <h1>Overview Dashboard</h1>
+        <p>Real-time environmental monitoring of data centers across the United States</p>
+      </div>
+      <div class="date-box" id="filterToggle">
+          <span id="dateLabel">-</span> ▾
+        <div class="filter-pop" onclick="event.stopPropagation()">
+          <div class="f-title">Year Filter</div>
+          <select id="yearSelect" class="pop-select"></select>
+          <div class="f-title">Month Filter</div>
+          <select id="monthSelect" class="pop-select"></select>
         </div>
-        <div class="nav-title">NAVIGATION</div>
-        """,
-        unsafe_allow_html=True,
-    )
-    for item, icon in [
-        ("Overview", "▣"), ("Hotspot Detail", "◎"), ("Alerts", "△"), ("Data Centers", "⌂"),
-        ("Trends", "↗"), ("Forecast", "◷"), ("Reports", "▤"), ("About", "ⓘ")
-    ]:
-        if st.button(f"{icon} {item}", key=f"menu_{item}"):
-            st.session_state.page = item
-    st.markdown(
-        """
-        <div class="source-box">
-            <div class="source-title">Data Source</div>
-            <div class="source-text">Google Earth Engine<br>2019 – 2025<br><br>🛰️</div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpiContainer"></div>
+
+    <div class="grid-2">
+      <div class="card" id="eciMapCard"></div>
+      <div class="card" id="essMapCard"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span>Top 5 by Environmental Change (ECI)</span><span style="color:var(--blue);cursor:pointer;font-size:11px;">View all</span></div>
+        <div class="card-sub">Highest rates of environmental change detection</div>
+        <table id="eciTable"><thead><tr><th>Rank</th><th>Data Center</th><th>ECI Score</th><th>Level</th><th>Trend</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <div class="card-title"><span>Top 5 by Environmental Stress (ESS)</span><span style="color:var(--blue);cursor:pointer;font-size:11px;">View all</span></div>
+        <div class="card-sub">Highest active environmental stress indicators</div>
+        <table id="essTable"><thead><tr><th>Rank</th><th>Data Center</th><th>ESS Score</th><th>Level</th><th>Trend</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(90deg, #E8F3FF, #F5F9FF); border:1px solid #CCE3FC; border-radius:10px; padding:12px; font-size:11px; display:flex; gap:16px; align-items:center; color:#1E3A8A;">
+      <span style="font-size:16px;">ℹ️</span>
+      <div><b>DC-Resource Intelligence Platform</b> transforms satellite-derived environmental indicators into early warning insights. <br/>🟢 <b>ECI</b> detects rapid historical deviation. 🟠 <b>ESS</b> monitors active current ecosystem pressure.</div>
+    </div>
+  </main>
+
+  <section class="right-panel">
+    <div class="r-header">
+      <div>
+        <div class="r-title">Hotspot Detail</div>
+        <div class="r-crumb">Overview • Hotspot Assessment</div>
+      </div>
+      <select class="select-box" id="hotspotSelect"></select>
+    </div>
+
+    <div class="mini-grid" id="miniGridContainer"></div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Land Surface Temperature (LST) ⓘ</div>
+        <svg class="spark-svg" id="lstChartSvg"></svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Normalized Difference Water Index (NDWI) ⓘ</div>
+        <svg class="spark-svg" id="ndwiChartSvg"></svg>
+      </div>
+    </div>
+
+    <div class="alert-banner" id="aiAlertBox"></div>
+
+    <div class="section-divider"><span>🔔 Community Alert</span></div>
+    
+    <div class="sub-grid">
+      <div class="info-block" id="alertLevelCard"></div>
+      <div class="info-block">
+        <div class="info-block-title">Issue Detected</div>
+        <b>High Heat & Water Stress Trend</b><br/>
+        <span style="color:var(--muted); font-size:10.5px;">Satellite records indicate notable heat retention and drop in surface moisture profiles over the last quarter.</span>
+      </div>
+    </div>
+
+    <div class="sub-grid">
+      <div class="info-block">
+        <div class="info-block-title">What does this mean?</div>
+        <span style="color:var(--muted);">The surrounding microclimate is currently carrying high operational stress loads. Localized warming or vegetation reduction may affect immediate infrastructure resource demands.</span>
+      </div>
+      <div class="info-block">
+        <div class="info-block-title">Recommended Actions</div>
+        <span style="font-size:10px; line-height:1.4;">
+          ✔️ Optimize cooling resource cycles<br/>
+          ✔️ Monitor local watershed changes<br/>
+          ✔️ Review sustainability compliance<br/>
+          ✔️ Coordinate updates with local authorities
+        </span>
+      </div>
+    </div>
+
+    <div class="sub-grid">
+      <div class="info-block">
+        <div class="info-block-title">Community Resources</div>
+        <span style="color:var(--blue); font-weight:500; cursor:pointer;">
+          💧 Local Water Authority ↗<br/>
+          🌡️ Microclimate Safety Guidelines ↗<br/>
+          📋 Submit Field Report ↗
+        </span>
+      </div>
+      <div class="info-block">
+        <div class="info-block-title">Stay Informed</div>
+        <span style="color:var(--muted);">Get automated changes alerts.</span>
+        <div class="email-box">
+          <input class="email-input" placeholder="name@domain.com"/>
+          <button class="email-btn">Subscribe</button>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+      </div>
+    </div>
 
-# -----------------------------
-# Filter data
-# -----------------------------
-year_list = sorted(df["Year"].unique())
-month_list = sorted(df.loc[df["Year"] == st.session_state.year, "year_month"].unique())
-risk_options = ["All"] + sorted(df["Risk Level"].dropna().unique())
+    <div class="footer-bar">
+      <span>🛡️ GeoSentinel Platform v2.4</span>
+      <span>System Update: 2026</span>
+    </div>
+  </section>
+</div>
 
-# Keep month valid after year change
-if st.session_state.month not in month_list:
-    st.session_state.month = month_list[-1]
+<script>
+// จัดการข้อมูลที่ถูกส่งมาจากฝั่ง Python Pandas ข้ามมายัง JS
+const DATA = __RECORDS_JSON__;
+const YEARS = __YEARS_JSON__;
+const ALL_MONTHS = __MONTHS_JSON__;
 
-latest = df[df["year_month"] == st.session_state.month].copy()
-if st.session_state.risk != "All":
-    latest = latest[latest["Risk Level"] == st.session_state.risk]
-if latest.empty:
-    latest = df[df["year_month"] == st.session_state.month].copy()
+let state = {
+  year: __LATEST_YEAR_JSON__,
+  month: __LATEST_MONTH_JSON__,
+  hotspot: null
+};
 
-# Hotspot default
-hotspot_row = latest.sort_values("risk_score", ascending=False).iloc[0]
-hotspot_name = hotspot_row["data_center_name"]
+function cleanName(s) { return String(s || '').replace(/_/g, ' '); }
+function fmt(n) { return Number.isFinite(Number(n)) ? Number(n).toFixed(2) : '-'; }
 
-# -----------------------------
-# Header + clickable filters in horizontal layout
-# -----------------------------
-header_col, filter_col = st.columns([3.25, 1.25], gap="large")
-with header_col:
-    st.markdown(
-        """
-        <div class="hero-card">
-            <div class="hero-title">DC-Resource Intelligence Platform</div>
-            <div class="hero-sub">GeoAI-Based Environmental Monitoring and Resource Risk Assessment for Data Centers</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+function getLevel(score) {
+  const s = Number(score);
+  if (s >= 70) return 'Critical';
+  if (s >= 50) return 'Concern';
+  if (s >= 35) return 'Watch';
+  return 'Stable';
+}
 
-with filter_col:
-    st.markdown('<div class="filter-wrap">', unsafe_allow_html=True)
-    y_cols = st.columns(len(year_list)) if len(year_list) <= 4 else st.columns(2)
-    for i, y in enumerate(year_list):
-        with y_cols[i % len(y_cols)]:
-            label = f"✓ {y}" if st.session_state.year == y else y
-            if st.button(f"📅 {label}", key=f"year_{y}"):
-                st.session_state.year = y
-                valid_months = sorted(df.loc[df["Year"] == y, "year_month"].unique())
-                st.session_state.month = valid_months[-1]
-                st.rerun()
-    r_cols = st.columns(2)
-    for i, r in enumerate(risk_options[:6]):
-        with r_cols[i % 2]:
-            label = f"✓ {r}" if st.session_state.risk == r else r
-            if st.button(f"📌 {label}", key=f"risk_{r}"):
-                st.session_state.risk = r
-                st.rerun()
-    m_cols = st.columns(3)
-    for i, m in enumerate(month_list):
-        with m_cols[i % 3]:
-            label = f"✓ {m}" if st.session_state.month == m else m
-            if st.button(label, key=f"month_{m}"):
-                st.session_state.month = m
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+function getColor(level) {
+  return { 'Critical': '#E63145', 'Concern': '#F97316', 'Watch': '#FACC15', 'Stable': '#22C55E', 'Low': '#22C55E' }[level] || '#64748B';
+}
 
-# -----------------------------
-# Main clone layout: left overview + right detail
-# -----------------------------
-left, right = st.columns([1.42, 1.0], gap="large")
+// ผูกฟังก์ชันเปิด/ปิดตัวเลือกกรองวันที่
+document.getElementById('filterToggle').onclick = function(e) {
+  this.classList.toggle('open');
+};
 
-with left:
-    # KPI cards
-    total_sites = latest["data_center_name"].nunique()
-    critical_eci = int((latest["ECI_score"].apply(level_from_eci) == "Critical").sum())
-    critical_ess = int((latest["ESS_score"].apply(level_from_ess) == "Critical").sum())
-    top_display = clean_name(hotspot_name)
+function initFilters() {
+  document.getElementById('dateLabel').textContent = state.month;
+  
+  const ySel = document.getElementById('yearSelect');
+  ySel.innerHTML = YEARS.map(y => `<option value="${y}" ${state.year===y?'selected':''}>${y}</option>`).join('');
+  ySel.onchange = (e) => {
+    state.year = e.target.value;
+    const available = ALL_MONTHS.filter(m => m.startsWith(state.year));
+    state.month = available[available.length - 1];
+    renderAll();
+  };
 
-    k1, k2, k3, k4 = st.columns(4)
-    with k1:
-        metric_card("Monitored Data Centers", total_sites, "Across selected filter", "▦", "blue")
-    with k2:
-        metric_card("Critical ECI Areas", critical_eci, "High rate of change", "↗", "red")
-    with k3:
-        metric_card("Critical ESS Areas", critical_ess, "High environmental stress", "⚠", "orange")
-    with k4:
-        metric_card("Top Hotspot", top_display, "Ranked by risk score", "⌖", "purple")
+  const mSel = document.getElementById('monthSelect');
+  const filteredMonths = ALL_MONTHS.filter(m => m.startsWith(state.year));
+  mSel.innerHTML = filteredMonths.map(m => `<option value="${m}" ${state.month===m?'selected':''}>${m}</option>`).join('');
+  mSel.onchange = (e) => {
+    state.month = e.target.value;
+    renderAll();
+  };
+}
 
-    map1, map2 = st.columns(2)
-    with map1:
-        section_header("▧ ECI Map", "Environmental Change Index by data center location")
-        st.markdown('<div class="map-box">', unsafe_allow_html=True)
-        st.plotly_chart(make_geo_map(latest, "ECI_score", "ECI", "RdYlGn_r"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown('</div>', unsafe_allow_html=True)
-    with map2:
-        section_header("▧ ESS Map", "Environmental Stress Score by data center location")
-        st.markdown('<div class="map-box">', unsafe_allow_html=True)
-        st.plotly_chart(make_geo_map(latest, "ESS_score", "ESS", "YlOrRd"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown('</div>', unsafe_allow_html=True)
+// วาดกราฟเส้นจิ๋ว (Sparklines) ด้านในตาราง Top 5 เพื่อความสวยงามเหมือนต้นฉบับ
+function generateTableSparkline(dcName, scoreCol, color) {
+  const history = DATA.filter(r => r.data_center_name === dcName).sort((a,b) => String(a.year_month).localeCompare(String(b.year_month)));
+  if (history.length < 2) return '-';
+  const vals = history.map(h => Number(h[scoreCol])).filter(Number.isFinite);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = (max - min) === 0 ? 1 : (max - min);
+  
+  const w = 60, h = 16;
+  const points = history.map((h, i) => {
+    const x = (i / (history.length - 1)) * w;
+    const y = h - ((Number(h[scoreCol]) - min) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  
+  return `<svg width="${w}" height="${h}"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+}
 
-    t1, t2 = st.columns(2)
-    with t1:
-        render_table(latest, "ECI_score", level_from_eci, "▣ Top 5 by Environmental Change")
-    with t2:
-        render_table(latest, "ESS_score", level_from_ess, "▣ Top 5 by Environmental Stress")
+function renderKPIs(currentData) {
+  const uniqueDCs = new Set(DATA.map(r => r.data_center_name)).size;
+  const criticalECI = currentData.filter(r => Number(r.ECI_score) >= 60).length;
+  const criticalESS = currentData.filter(r => Number(r.ESS_score) >= 60).length;
+  
+  const topDC = [...currentData].sort((a,b) => Number(b.risk_score) - Number(a.risk_score))[0];
+  const topName = topDC ? cleanName(topDC.data_center_name) : 'None';
 
-    st.markdown(
-        """
-        <div class="section-card" style="padding:16px 18px; background:#eef7ff;">
-            <b style="color:#2563eb;">ⓘ</b>
-            <span style="color:#334155; font-size:12px; font-weight:650; margin-left:8px;">
-            DC-Resource Intelligence Platform transforms satellite-derived environmental indicators into early warning insights for infrastructure and decision-makers.</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+  document.getElementById('kpiContainer').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-icon" style="background:#EBF3FC; color:#1268E8;">🏢</div>
+      <div>
+        <div class="kpi-title">Monitored Facilities</div>
+        <div class="kpi-value">${uniqueDCs}</div>
+        <div class="kpi-sub">Data centers active</div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon" style="background:#FFE5E7; color:#E63145;">📈</div>
+      <div>
+        <div class="kpi-title">Critical ECI</div>
+        <div class="kpi-value">${criticalECI}</div>
+        <div class="kpi-sub">Rapid shift zones</div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon" style="background:#FFEAD5; color:#F97316;">⚠️</div>
+      <div>
+        <div class="kpi-title">Critical ESS</div>
+        <div class="kpi-value">${criticalESS}</div>
+        <div class="kpi-sub">High stress zones</div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-icon" style="background:#F0EBFB; color:#6D42E8;">🎯</div>
+      <div>
+        <div class="kpi-title">Top Hotspot</div>
+        <div class="kpi-value" style="font-size:14px; color:var(--purple); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${topName}</div>
+        <div class="kpi-sub">Risk Score: ${topDC ? fmt(topDC.risk_score) : '-'}</div>
+      </div>
+    </div>
+  `;
+}
 
-with right:
-    st.markdown('<div class="detail-panel">', unsafe_allow_html=True)
-    st.markdown('<div class="crumb">← Overview › Hotspot Detail</div><div class="detail-title">Hotspot Detail</div>', unsafe_allow_html=True)
+function renderMaps(currentData) {
+  // ฟังก์ชันแปลงพิกัดจำลองพิกัด US บรรจุลงในกล่อง SVG ของการ์ด
+  const getPointsHTML = (scoreField) => currentData.map(r => {
+    const lat = Number(r.latitude), lon = Number(r.longitude);
+    const x = ((lon + 125) / (-66 + 125)) * 100;
+    const y = (1 - (lat - 24) / (50 - 24)) * 100;
+    const color = getColor(getLevel(r[scoreField]));
+    const isTarget = r.data_center_name === state.hotspot ? 'active' : '';
+    return `<div class="map-point ${isTarget}" style="left:${x}%; top:${y}%; background:${color};" onclick="selectHotspot('${r.data_center_name}')" title="${cleanName(r.data_center_name)}"></div>`;
+  }).join('');
 
-    name_options = latest.sort_values("risk_score", ascending=False)["data_center_name"].tolist()
-    display_options = [clean_name(x) for x in name_options]
-    selected_display = st.selectbox("Select Hotspot", display_options, index=0, key="hotspot_select")
-    selected_name = name_options[display_options.index(selected_display)]
+  const legendHTML = `<div class="map-legend"><span style="color:#22C55E">●</span> Stable <span style="color:#FACC15">●</span> Watch <span style="color:#F97316">●</span> Concern <span style="color:#E63145">●</span> Critical</div>`;
 
-    selected_latest = latest[latest["data_center_name"] == selected_name].iloc[0]
-    selected_all = df[df["data_center_name"] == selected_name].sort_values("year_month")
+  document.getElementById('eciMapCard').innerHTML = `
+    <div class="card-title">ECI Map (Environmental Change Index) ⓘ</div>
+    <div class="card-sub">Geospatial change detection rates</div>
+    <div class="mapbox"><div class="us-shape"></div>${getPointsHTML('ECI_score')}${legendHTML}</div>
+  `;
+  document.getElementById('essMapCard').innerHTML = `
+    <div class="card-title">ESS Map (Environmental Stress Score) ⓘ</div>
+    <div class="card-sub">Active ecosystem pressure mapping</div>
+    <div class="mapbox"><div class="us-shape"></div>${getPointsHTML('ESS_score')}${legendHTML}</div>
+  `;
+}
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        small_card(clean_name(selected_name), "", None, f"Lat {selected_latest.latitude:.3f}, Lon {selected_latest.longitude:.3f}")
-    with c2:
-        small_card("ECI Score", f"{selected_latest.ECI_score:.2f}", level_from_eci(selected_latest.ECI_score), "Rate of environmental change")
-    with c3:
-        small_card("ESS Score", f"{selected_latest.ESS_score:.2f}", level_from_ess(selected_latest.ESS_score), "Current environmental stress")
-    with c4:
-        key = "High Surface Temperature" if selected_latest.mean_LST_C >= latest.mean_LST_C.median() else "Water Availability Watch"
-        small_card("Key Drivers", "3", None, key)
+function renderTables(currentData) {
+  const topECI = [...currentData].sort((a,b) => Number(b.ECI_score) - Number(a.ECI_score)).slice(0, 5);
+  const topESS = [...currentData].sort((a,b) => Number(b.ESS_score) - Number(a.ESS_score)).slice(0, 5);
 
-    chart1, chart2 = st.columns(2)
-    with chart1:
-        st.markdown('<div class="section-card" style="padding:14px;"><div class="table-title">Land Surface Temperature</div>', unsafe_allow_html=True)
-        st.plotly_chart(line_chart(selected_all, "mean_LST_C", "LST", "#dc2626"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown('</div>', unsafe_allow_html=True)
-    with chart2:
-        st.markdown('<div class="section-card" style="padding:14px;"><div class="table-title">Water Availability Index</div>', unsafe_allow_html=True)
-        st.plotly_chart(line_chart(selected_all, "mean_NDWI", "NDWI", "#2563eb"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown('</div>', unsafe_allow_html=True)
+  document.getElementById('eciTable').querySelector('tbody').innerHTML = topECI.map((r, i) => `
+    <tr style="cursor:pointer;" onclick="selectHotspot('${r.data_center_name}')">
+      <td>${i+1}</td>
+      <td><b>${cleanName(r.data_center_name)}</b></td>
+      <td>${fmt(r.ECI_score)}</td>
+      <td><span class="badge ${getLevel(r.ECI_score)}">${getLevel(r.ECI_score)}</span></td>
+      <td>${generateTableSparkline(r.data_center_name, 'ECI_score', '#E63145')}</td>
+    </tr>
+  `).join('');
 
-    risk_level = str(selected_latest["Risk Level"])
-    risk_score = float(selected_latest["risk_score"])
-    st.markdown(
-        f"""
-        <div class="alert-box">
-            <div class="alert-icon">!</div>
-            <div style="flex:1;">
-                <div class="alert-title">AI Alert Summary</div>
-                <div class="alert-text">{clean_name(selected_name)} shows elevated environmental stress with current resource pressure. Forecast outputs indicate the risk level should be monitored over the next 6 to 12 months.</div>
-            </div>
-            <div style="text-align:center;">
-                <div class="small-label">Overall Risk Level</div>
-                <div class="risk-badge">{risk_level.upper()}</div>
-                <div class="small-note">Score {risk_score:.2f}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+  document.getElementById('essTable').querySelector('tbody').innerHTML = topESS.map((r, i) => `
+    <tr style="cursor:pointer;" onclick="selectHotspot('${r.data_center_name}')">
+      <td>${i+1}</td>
+      <td><b>${cleanName(r.data_center_name)}</b></td>
+      <td>${fmt(r.ESS_score)}</td>
+      <td><span class="badge ${getLevel(r.ESS_score)}">${getLevel(r.ESS_score)}</span></td>
+      <td>${generateTableSparkline(r.data_center_name, 'ESS_score', '#F97316')}</td>
+    </tr>
+  `).join('');
+}
 
-    a, b = st.columns(2)
-    with a:
-        st.markdown(
-            """
-            <div class="info-box">
-                <div class="info-title">What does this mean?</div>
-                <div class="info-text">The selected area is monitored for heat stress, water availability, vegetation condition, and built-up pressure around the data center location.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with b:
-        st.markdown(
-            """
-            <div class="info-box">
-                <div class="info-title">Recommended Actions</div>
-                <div class="info-list">✓ Monitor local water usage<br>✓ Review cooling efficiency<br>✓ Watch peak heat periods<br>✓ Prepare mitigation planning</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+function renderHotspotSection(currentData) {
+  const hSel = document.getElementById('hotspotSelect');
+  hSel.innerHTML = currentData.map(r => `<option value="${r.data_center_name}" ${r.data_center_name===state.hotspot?'selected':''}>${cleanName(r.data_center_name)}</option>`).join('');
+  hSel.onchange = (e) => { selectHotspot(e.target.value); };
 
-    f6 = selected_latest.get("forecast_risk_score_6m", None)
-    f12 = selected_latest.get("forecast_risk_score_12m", None)
-    if f6 is not None and f12 is not None:
-        p1, p2, p3 = st.columns(3)
-        with p1:
-            small_card("Current Risk", f"{risk_score:.2f}", risk_level, "Baseline")
-        with p2:
-            small_card("Forecast 6 Months", f"{float(f6):.2f}", selected_latest.get("forecast_risk_level_6m", "Watch"), "Predictive risk")
-        with p3:
-            small_card("Forecast 12 Months", f"{float(f12):.2f}", selected_latest.get("forecast_risk_level_12m", "Watch"), "Longer-term risk")
+  const activeRec = currentData.find(r => r.data_center_name === state.hotspot) || currentData[0];
+  if (!activeRec) return;
 
-    st.markdown('</div>', unsafe_allow_html=True)
+  // Mini Cards Setup
+  document.getElementById('miniGridContainer').innerHTML = `
+    <div class="mini-card"><div class="mini-title">Facility Cluster</div><div class="mini-value" style="font-size:12px;margin-top:8px;color:#111827;"><b>${cleanName(activeRec.data_center_name)}</b></div></div>
+    <div class="mini-card"><div class="mini-title">ECI Score</div><div class="mini-value">${fmt(activeRec.ECI_score)}</div><span class="badge ${getLevel(activeRec.ECI_score)}">${getLevel(activeRec.ECI_score)}</span></div>
+    <div class="mini-card"><div class="mini-title">ESS Score</div><div class="mini-value">${fmt(activeRec.ESS_score)}</div><span class="badge ${getLevel(activeRec.ESS_score)}">${getLevel(activeRec.ESS_score)}</span></div>
+    <div class="mini-card"><div class="mini-title">Risk Level</div><div class="mini-value" style="font-size:15px;color:${getColor(getLevel(activeRec.risk_score))}">${getLevel(activeRec.risk_score).toUpperCase()}</div></div>
+  `;
 
-# -----------------------------
-# Extra pages are clickable and show filtered content
-# -----------------------------
-if st.session_state.page != "Overview":
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="section-card" style="padding:18px;">
-            <div class="section-title">{st.session_state.page}</div>
-            <div class="section-subtitle">This section is active. It uses the selected year, month, risk level, and hotspot filters.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+  // Draw Detailed Line Charts (LST & NDWI)
+  drawPanelChart('lstChartSvg', activeRec.data_center_name, 'mean_LST_C', '#E63145', 'rgba(230,49,69,0.1)');
+  drawPanelChart('ndwiChartSvg', activeRec.data_center_name, 'mean_NDWI', '#1268E8', 'rgba(18,104,232,0.1)');
+
+  // AI Alert Content
+  const overallLevel = getLevel(activeRec.risk_score);
+  document.getElementById('aiAlertBox').innerHTML = `
+    <div class="alert-icon-box">⚠️</div>
+    <div class="alert-banner-text">
+      <b>AI Alert Summary (${cleanName(activeRec.data_center_name)})</b><br/>
+      The platform detected an elevation in climate variability markers relative to core spatial baselines. Active optimization protocols are advised.
+    </div>
+    <div>
+      <div class="risk-badge-large" style="background:${getColor(overallLevel)}">${overallLevel.toUpperCase()}</div>
+    </div>
+  `;
+
+  // Community Alert Summary Card
+  document.getElementById('alertLevelCard').innerHTML = `
+    <div class="info-block-title">Alert Status</div>
+    <span class="badge ${overallLevel}" style="font-size:14px; padding:4px 10px;">${overallLevel.toUpperCase()}</span>
+    <div style="margin-top:10px; color:var(--muted); font-size:10px;">Period Focus:<br/><b>${state.month}</b></div>
+  `;
+}
+
+function drawPanelChart(svgId, dcName, col, color, fillBg) {
+  const svg = document.getElementById(svgId);
+  const history = DATA.filter(r => r.data_center_name === dcName).sort((a,b) => String(a.year_month).localeCompare(String(b.year_month)));
+  if (!history.length) { svg.innerHTML = ''; return; }
+
+  const width = 260, height = 100, padding = 15;
+  const vals = history.map(h => Number(h[col])).filter(Number.isFinite);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const delta = (max - min) === 0 ? 1 : (max - min);
+
+  const points = history.map((h, i) => {
+    const x = padding + (i / (history.length - 1)) * (width - padding * 2);
+    const y = (height - padding) - ((Number(h[col]) - min) / delta) * (height - padding * 2);
+    return [x, y];
+  });
+
+  const linePath = points.map(p => p.join(',')).join(' ');
+  const areaPath = `${padding},${height-padding} ` + linePath + ` ${width-padding},${height-padding}`;
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.innerHTML = `
+    <line x1="${padding}" y1="${height/2}" x2="${width-padding}" y2="${height/2}" stroke="#F0F4F8" stroke-dasharray="3,3" />
+    <polygon points="${areaPath}" fill="${fillBg}"></polygon>
+    <polyline points="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    <circle cx="${points[points.length-1][0]}" cy="${points[points.length-1][1]}" r="3.5" fill="${color}"></circle>
+    <text x="${width - padding}" y="${height - 2}" text-anchor="end" font-size="9" fill="#718096">${history[history.length-1].year_month}</text>
+    <text x="${padding}" y="${padding - 4}" font-size="10" font-weight="bold" fill="${color}">${fmt(history[history.length-1][col])}</text>
+  `;
+}
+
+function selectHotspot(name) {
+  state.hotspot = name;
+  const currentData = DATA.filter(r => String(r.year_month) === state.month);
+  renderHotspotSection(currentData);
+  renderMaps(currentData);
+}
+
+function renderAll() {
+  initFilters();
+  const currentData = DATA.filter(r => String(r.year_month) === state.month);
+  
+  if (currentData.length && (!state.hotspot || !currentData.find(r => r.data_center_name === state.hotspot))) {
+    state.hotspot = currentData[0].data_center_name;
+  }
+  
+  renderKPIs(currentData);
+  renderMaps(currentData);
+  renderTables(currentData);
+  renderHotspotSection(currentData);
+}
+
+// เริ่มต้นเรียกใช้งานระบบครั้งแรก
+renderAll();
+</script>
+
+</body>
+</html>
+"""
+
+# 3. นำข้อมูลความปลอดภัยมาประกอบร่าง (Plain-string replacement ตัดโอกาส Error)
+html_rendered = html_template.replace("__RECORDS_JSON__", records_json)\
+                             .replace("__YEARS_JSON__", years_json)\
+                             .replace("__MONTHS_JSON__", months_json)\
+                             .replace("__LATEST_YEAR_JSON__", json.dumps(latest_year))\
+                             .replace("__LATEST_MONTH_JSON__", json.dumps(latest_month))
+
+# ส่งผลลัพธ์แสดงผลในความกว้างหน้าจอขนาดใหญ่ตามตารางจัดวาง
+components.html(html_rendered, height=1100, scrolling=True)
