@@ -6,7 +6,7 @@ from pathlib import Path
 
 # =========================================================
 # DC-Resource Intelligence Platform
-# File: GEO_FINAL.py
+# File: geop.py
 # Data source: geosentinel_dashboard_data.csv only
 # =========================================================
 
@@ -55,7 +55,7 @@ def risk_badge_class(value):
 def compute_priority_score(data):
     eci_rank = data["ECI"].rank(pct=True)
     ess_rank = data["ESS"].rank(pct=True)
-    return ((eci_rank + ess_rank) / 2 * 100).round(1)
+    return ((eci_rank + ess_rank) / 2 * 100).round(0).astype(int)
 
 
 def classify_change_direction(row):
@@ -159,7 +159,7 @@ def load_data():
     path = Path("geosentinel_dashboard_data.csv")
 
     if not path.exists():
-        st.error("ไม่พบไฟล์ geosentinel_dashboard_data.csv กรุณาวางไฟล์ไว้ในโฟลเดอร์เดียวกับ GEO_FINAL.py")
+        st.error("ไม่พบไฟล์ geosentinel_dashboard_data.csv กรุณาวางไฟล์ไว้ในโฟลเดอร์เดียวกับ geop.py")
         st.stop()
 
     data = pd.read_csv(path)
@@ -188,6 +188,11 @@ def load_data():
     return data
 
 
+def table_height(row_count, row_height=36, header_height=42, max_height=430):
+    # Shows only existing rows. No empty table area.
+    return min(max_height, header_height + max(1, row_count) * row_height)
+
+
 def style_figure(fig, height=None):
     if height:
         fig.update_layout(height=height)
@@ -196,8 +201,16 @@ def style_figure(fig, height=None):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Raleway", color="#f7fbff", size=11),
-        margin=dict(l=0, r=0, t=20, b=0),
-        legend=dict(font=dict(color="#e5f1ff", size=10), bgcolor="rgba(0,0,0,0)")
+        margin=dict(l=0, r=0, t=24, b=4),
+        legend=dict(
+            font=dict(color="#e5f1ff", size=10),
+            bgcolor="rgba(0,0,0,0)",
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
     )
 
     fig.update_xaxes(
@@ -220,7 +233,7 @@ def render_kpi(label, value, note, color_class="cyan"):
         f"""
         <div class="kpi-card">
             <div class="kpi-label">{label}</div>
-            <div class="kpi-value {color_class}">{value}</div>
+            <div class="kpi-value metric-number {color_class}">{value}</div>
             <div class="kpi-note">{note}</div>
         </div>
         """,
@@ -231,12 +244,13 @@ def render_kpi(label, value, note, color_class="cyan"):
 def render_ranking_cards(rank_df):
     for idx, (_, row) in enumerate(rank_df.iterrows(), start=1):
         badge = risk_badge_class(row["Risk Classification"])
+        score = int(round(row["Priority Score"]))
         st.markdown(
             f"""
             <div class="ranking-row">
-                <div class="rank-number">#{idx}</div>
+                <div class="rank-number metric-number">#{idx}</div>
                 <div class="rank-name">{row['Monitored Facility']}</div>
-                <div class="rank-score">{row['Priority Score']:.1f}</div>
+                <div class="rank-score metric-number">{score}</div>
                 <div class="risk-badge {badge}">{row['Risk Classification']}</div>
             </div>
             """,
@@ -245,14 +259,15 @@ def render_ranking_cards(rank_df):
 
 
 def render_prediction_cards(row):
-    progress = min(max(float(row["Priority Score"]), 8), 100)
+    progress = min(max(int(round(float(row["Priority Score"]))), 8), 100)
+    ess = round(float(row["ESS"]))
     st.markdown(
         f"""
         <div class="prediction-grid">
             <div class="prediction-card">
                 <div class="prediction-label">Current Classification</div>
                 <div class="prediction-value">{row['Risk Classification']}</div>
-                <div class="prediction-detail">Environmental Stress Score: {row['ESS']:.2f}</div>
+                <div class="prediction-detail">Environmental Stress Score: <span class="metric-number">{ess}</span></div>
                 <div class="progress-track"><div class="progress-fill" style="width:{progress}%"></div></div>
             </div>
             <div class="prediction-arrow">→</div>
@@ -277,17 +292,17 @@ def render_prediction_cards(row):
 
 def render_recommendation_cards(row):
     cards = build_recommendations(row)
+    html = '<div class="recommend-grid">'
     for title, body, basis in cards:
-        st.markdown(
-            f"""
+        html += f"""
             <div class="recommend-card">
                 <div class="recommend-title">{title}</div>
                 <div class="recommend-body">{body}</div>
                 <div class="recommend-basis">{basis}</div>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+        """
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # -----------------------------
@@ -296,10 +311,21 @@ def render_recommendation_cards(row):
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800;900&family=DM+Sans:wght@700&display=swap');
 
     html, body, [class*="css"], .stApp, div, span, p, h1, h2, h3, h4, label, button {
         font-family: 'Raleway', sans-serif !important;
+    }
+
+    .metric-number,
+    .kpi-value,
+    .rank-number,
+    .rank-score,
+    div[data-testid="stMetricValue"] {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 700 !important;
+        font-style: normal !important;
+        letter-spacing: -0.02em;
     }
 
     .stApp {
@@ -311,9 +337,9 @@ st.markdown(
     }
 
     .block-container {
-        padding-top: 1.2rem;
-        padding-bottom: 1.8rem;
-        max-width: 1500px;
+        padding-top: 1.15rem;
+        padding-bottom: 2rem;
+        max-width: 1520px;
     }
 
     section[data-testid="stSidebar"] {
@@ -349,7 +375,7 @@ st.markdown(
     }
 
     .main-title {
-        font-size: 36px;
+        font-size: 34px;
         font-weight: 900;
         letter-spacing: -0.05em;
         color: #ffffff;
@@ -359,7 +385,7 @@ st.markdown(
     .subtitle {
         color: #d1e3f4;
         font-size: 13px;
-        margin-bottom: 16px;
+        margin-bottom: 18px;
         line-height: 1.5;
     }
 
@@ -383,54 +409,57 @@ st.markdown(
         padding: 18px;
         box-shadow: 0 24px 70px rgba(0,0,0,.28);
         backdrop-filter: blur(14px);
-        margin-bottom: 16px;
+        margin-bottom: 18px;
+        overflow: visible;
     }
 
     .kpi-card {
         background: linear-gradient(180deg, rgba(255,255,255,.125), rgba(255,255,255,.065));
         border: 1px solid rgba(182,222,255,.18);
         border-radius: 24px;
-        padding: 17px;
-        min-height: 116px;
+        padding: 16px;
+        min-height: 122px;
         box-shadow: 0 18px 45px rgba(0,0,0,.18);
+        overflow: hidden;
     }
 
     .kpi-label {
         color: #d5e6f5;
-        font-size: 10.5px;
+        font-size: 10.2px;
         font-weight: 800;
         letter-spacing: .04em;
         text-transform: uppercase;
+        line-height: 1.35;
     }
 
     .kpi-value {
-        font-size: 31px;
-        font-weight: 900;
+        font-size: 30px;
         line-height: 1.05;
-        margin-top: 8px;
+        margin-top: 9px;
         color: #ffffff;
+        white-space: nowrap;
     }
 
     .kpi-note {
         color: #c6d8ea;
-        font-size: 10.5px;
-        margin-top: 7px;
+        font-size: 10.2px;
+        margin-top: 8px;
         line-height: 1.35;
     }
 
     .section-title {
-        font-size: 17px;
+        font-size: 16.5px;
         font-weight: 900;
         color: #ffffff;
-        margin-bottom: 4px;
+        margin-bottom: 5px;
         letter-spacing: -.02em;
     }
 
     .section-subtitle {
         color: #c7d9ea;
-        font-size: 11.4px;
+        font-size: 11.2px;
         line-height: 1.45;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
     }
 
     .cyan { color: #46e6ff; }
@@ -440,117 +469,128 @@ st.markdown(
 
     .ranking-row {
         display: grid;
-        grid-template-columns: 42px 1fr 64px 92px;
+        grid-template-columns: 42px minmax(0, 1fr) 58px 92px;
         gap: 10px;
         align-items: center;
-        padding: 13px 14px;
-        border-radius: 19px;
+        padding: 12px 13px;
+        border-radius: 18px;
         background: linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.06));
         border: 1px solid rgba(182,222,255,.16);
-        margin-bottom: 10px;
+        margin-bottom: 9px;
+        min-height: 62px;
     }
 
     .rank-number {
         color: #ffffff;
         font-size: 15px;
-        font-weight: 900;
     }
 
     .rank-name {
         color: #f7fbff;
-        font-size: 13px;
+        font-size: 12.5px;
         font-weight: 800;
-        line-height: 1.35;
+        line-height: 1.32;
+        word-break: break-word;
     }
 
     .rank-score {
         color: #dbeafe;
-        font-size: 15px;
-        font-weight: 900;
+        font-size: 16px;
         text-align: center;
     }
 
     .risk-badge {
         border-radius: 999px;
-        padding: 7px 10px;
-        font-size: 10.5px;
+        padding: 6px 8px;
+        font-size: 10px;
         font-weight: 900;
         text-align: center;
+        white-space: nowrap;
     }
 
     .risk-critical {
-        background: rgba(255,77,109,.22);
+        background: rgba(255,77,109,.24);
         color: #ff9aaa;
+        border: 1px solid rgba(255,77,109,.35);
     }
 
     .risk-warning {
-        background: rgba(251,191,36,.20);
+        background: rgba(251,191,36,.22);
         color: #ffe08a;
+        border: 1px solid rgba(251,191,36,.30);
     }
 
     .risk-safe {
         background: rgba(56,239,125,.18);
         color: #98ffc1;
+        border: 1px solid rgba(56,239,125,.28);
     }
 
     .risk-default {
         background: rgba(34,211,238,.18);
         color: #bdf7ff;
+        border: 1px solid rgba(34,211,238,.28);
     }
 
     .prediction-grid {
         display: grid;
-        grid-template-columns: 1fr 36px 1fr 36px 1fr;
-        gap: 12px;
-        align-items: center;
+        grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr);
+        gap: 14px;
+        align-items: stretch;
     }
 
     .prediction-card {
-        min-height: 160px;
+        min-height: 185px;
         padding: 17px;
         border-radius: 24px;
         background: linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.060));
         border: 1px solid rgba(182,222,255,.18);
+        overflow: visible;
     }
 
     .prediction-label {
         color: #b8cce1;
-        font-size: 11px;
+        font-size: 10.2px;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: .03em;
         margin-bottom: 12px;
+        line-height: 1.35;
     }
 
     .prediction-value {
         color: #ffffff;
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 900;
-        line-height: 1.22;
-        margin-bottom: 10px;
+        line-height: 1.28;
+        margin-bottom: 12px;
+        word-break: normal;
     }
 
     .prediction-detail {
         color: #d7e8f8;
-        font-size: 12px;
+        font-size: 11.3px;
         line-height: 1.45;
-        min-height: 38px;
+        min-height: 45px;
     }
 
     .prediction-arrow {
         color: #9fb4ca;
-        font-size: 28px;
+        font-size: 24px;
         font-weight: 800;
         text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .progress-track {
         width: 100%;
-        height: 10px;
+        height: 9px;
         border-radius: 999px;
         background: rgba(255,255,255,.14);
         overflow: hidden;
-        margin-top: 14px;
+        margin-top: 16px;
     }
 
     .progress-fill {
@@ -569,63 +609,72 @@ st.markdown(
 
     .insight-box {
         display: grid;
-        grid-template-columns: 54px 1fr;
-        gap: 14px;
+        grid-template-columns: 50px minmax(0, 1fr);
+        gap: 13px;
         align-items: start;
         background: rgba(255,255,255,.075);
         border: 1px solid rgba(182,222,255,.18);
         border-radius: 22px;
-        padding: 16px;
+        padding: 15px;
+        overflow: visible;
     }
 
     .bot-icon {
-        width: 54px;
-        height: 54px;
+        width: 50px;
+        height: 50px;
         border-radius: 18px;
         background: linear-gradient(135deg, #2fe1ee, #316fff);
         display: grid;
         place-items: center;
-        font-size: 25px;
+        font-size: 23px;
         box-shadow: 0 0 24px rgba(47,225,238,.30);
     }
 
     .mini-text {
         color: #d7e8f8;
-        font-size: 12px;
-        line-height: 1.65;
+        font-size: 11.5px;
+        line-height: 1.62;
+    }
+
+    .mini-text ul {
+        margin-top: 8px;
+        padding-left: 18px;
     }
 
     .recommend-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 13px;
+        align-items: stretch;
     }
 
     .recommend-card {
-        min-height: 135px;
+        min-height: 150px;
         padding: 15px;
         border-radius: 22px;
         background: linear-gradient(180deg, rgba(255,255,255,.105), rgba(255,255,255,.060));
         border: 1px solid rgba(182,222,255,.17);
+        overflow: visible;
     }
 
     .recommend-title {
         color: #ffffff;
-        font-size: 13.5px;
+        font-size: 13px;
         font-weight: 900;
         margin-bottom: 9px;
+        line-height: 1.35;
     }
 
     .recommend-body {
         color: #d4e4f3;
-        font-size: 11.5px;
+        font-size: 11.2px;
         line-height: 1.55;
         margin-bottom: 10px;
     }
 
     .recommend-basis {
         color: #9fc4dc;
-        font-size: 10.2px;
+        font-size: 10px;
         line-height: 1.35;
         border-top: 1px solid rgba(255,255,255,.10);
         padding-top: 8px;
@@ -636,18 +685,20 @@ st.markdown(
         border: 1px solid rgba(182,222,255,.18);
         border-radius: 18px;
         padding: 13px;
+        min-height: 96px;
     }
 
     div[data-testid="stMetric"] label {
         color: #d5e6f5 !important;
-        font-size: 11px !important;
+        font-size: 10.5px !important;
         font-weight: 800 !important;
+        line-height: 1.3 !important;
     }
 
     div[data-testid="stMetricValue"] {
         color: #ffffff !important;
-        font-size: 22px !important;
-        font-weight: 900 !important;
+        font-size: 21px !important;
+        transform: none !important;
     }
 
     .stDataFrame {
@@ -656,10 +707,10 @@ st.markdown(
     }
 
     [data-testid="stDataFrame"] div {
-        font-size: 11px !important;
+        font-size: 10.5px !important;
     }
 
-    @media (max-width: 1000px) {
+    @media (max-width: 1200px) {
         .prediction-grid {
             grid-template-columns: 1fr;
         }
@@ -667,13 +718,19 @@ st.markdown(
         .prediction-arrow {
             display: none;
         }
+    }
 
-        .recommend-grid {
-            grid-template-columns: 1fr;
+    @media (max-width: 900px) {
+        .ranking-row {
+            grid-template-columns: 38px minmax(0, 1fr);
         }
 
-        .ranking-row {
-            grid-template-columns: 38px 1fr;
+        .rank-score, .risk-badge {
+            text-align: left;
+        }
+
+        .kpi-value {
+            font-size: 26px;
         }
     }
     </style>
@@ -755,11 +812,11 @@ if page == "Executive Overview":
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">Priority Environmental Risk Assessment</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-subtitle">Top-ranked monitored facilities based on environmental change and stress indicators.</div>',
+            '<div class="section-subtitle">Top 10 monitored facilities based on environmental change and stress indicators.</div>',
             unsafe_allow_html=True
         )
 
-        ranking = df.sort_values("Priority Score", ascending=False).head(5)[
+        ranking = df.sort_values("Priority Score", ascending=False).head(10)[
             ["Monitored Facility", "Priority Score", "Risk Classification"]
         ]
         render_ranking_cards(ranking)
@@ -781,12 +838,12 @@ if page == "Executive Overview":
             size="Priority Score",
             size_max=24,
             zoom=3,
-            height=500,
+            height=560,
             hover_name="Monitored Facility",
             hover_data={
                 "lat": False,
                 "lon": False,
-                "Priority Score": ":.1f",
+                "Priority Score": True,
                 "ECI": ":.2f",
                 "ESS": ":.2f",
                 "Risk Classification": True,
@@ -810,7 +867,7 @@ if page == "Executive Overview":
         st.plotly_chart(fig_map, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    p_left, p_right = st.columns([0.62, 0.38])
+    p_left, p_right = st.columns([0.60, 0.40])
 
     with p_left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -841,7 +898,7 @@ if page == "Executive Overview":
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
-    r_left, r_right = st.columns([0.62, 0.38])
+    r_left, r_right = st.columns([0.60, 0.40])
 
     with r_left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -850,9 +907,7 @@ if page == "Executive Overview":
             '<div class="section-subtitle">Action areas are selected from observed environmental change signals.</div>',
             unsafe_allow_html=True
         )
-        st.markdown('<div class="recommend-grid">', unsafe_allow_html=True)
         render_recommendation_cards(top_priority)
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with r_right:
@@ -872,27 +927,31 @@ if page == "Executive Overview":
                 "Warning": "#fbbf24",
                 "Safe": "#38ef7d",
             },
-            height=300,
+            height=320,
             text="Number of Facilities"
         )
-        fig.update_traces(textposition="outside", textfont_color="#ffffff")
+        fig.update_traces(
+            textposition="outside",
+            textfont=dict(color="#ffffff", family="DM Sans", size=16),
+            cliponaxis=False,
+        )
         st.plotly_chart(style_figure(fig), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Executive Summary Table</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-subtitle">Presentation-ready labels are used. No raw column names or underscores are displayed.</div>',
+        '<div class="section-subtitle">Top 10 facilities only. Presentation-ready labels are used. No raw column names or underscores are displayed.</div>',
         unsafe_allow_html=True
     )
 
-    table = df.sort_values("Priority Score", ascending=False)[
+    table = df.sort_values("Priority Score", ascending=False).head(10)[
         ["Monitored Facility", "Priority Score", "ECI", "ESS", "Risk Classification", "Risk Outlook"]
     ].rename(columns={
         "ECI": "Environmental Change Index",
         "ESS": "Environmental Stress Score",
     })
-    st.dataframe(table, use_container_width=True, hide_index=True, height=min(440, 78 + len(table) * 38))
+    st.dataframe(table, use_container_width=True, hide_index=True, height=table_height(len(table)))
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -910,7 +969,7 @@ elif page == "Site Intelligence":
     a.metric("Risk Classification", row["Risk Classification"])
     b.metric("Environmental Change Index", f"{row['ECI']:.2f}")
     c.metric("Environmental Stress Score", f"{row['ESS']:.2f}")
-    d.metric("Priority Score", f"{row['Priority Score']:.1f}")
+    d.metric("Priority Score", f"{int(round(row['Priority Score']))}")
 
     e, f, g = st.columns(3)
     e.metric("Land Surface Temperature", f"{row['mean_LST_C']:.2f} °C")
@@ -950,16 +1009,22 @@ elif page == "Site Intelligence":
             ]
         })
 
-        fig = px.bar(
-            indicator_df,
-            x="Value",
-            y="Environmental Indicator",
+        metric_colors = [
+            "#ff4d6d", "#22d3ee", "#38ef7d", "#f97316", "#60a5fa",
+            "#a3e635", "#a855f7", "#fbbf24", "#14b8a6"
+        ]
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=indicator_df["Value"],
+            y=indicator_df["Environmental Indicator"],
             orientation="h",
-            color="Value",
-            color_continuous_scale=["#7c5cff", "#22d3ee", "#38ef7d"],
-            height=460
-        )
-        fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            marker_color=metric_colors,
+            text=[f"{v:.2f}" if abs(v) < 100 else f"{v:.0f}" for v in indicator_df["Value"]],
+            textposition="outside",
+            textfont=dict(color="#ffffff", family="DM Sans", size=12),
+            cliponaxis=False,
+        ))
+        fig.update_layout(showlegend=False, height=480)
         st.plotly_chart(style_figure(fig), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -992,35 +1057,47 @@ elif page == "Environmental Dynamics":
     st.markdown('<div class="section-title">Environmental Change Dynamics</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-subtitle">Comparison of observed environmental change indicators across monitored facilities.</div>', unsafe_allow_html=True)
 
-    trend_df = df.sort_values("Priority Score", ascending=False).copy()
+    trend_df = df.sort_values("Priority Score", ascending=False).head(10).copy()
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name="Temperature Change",
         x=trend_df["Monitored Facility"],
         y=trend_df["lst_change"],
-        marker_color="#ff4d6d"
+        marker_color="#ff4d6d",
+        text=[f"{v:.2f}" for v in trend_df["lst_change"]],
+        textposition="outside",
+        textfont=dict(color="#ffffff", family="DM Sans", size=11),
+        cliponaxis=False,
     ))
     fig.add_trace(go.Bar(
         name="Water Availability Change",
         x=trend_df["Monitored Facility"],
         y=trend_df["ndwi_change"],
-        marker_color="#22d3ee"
+        marker_color="#22d3ee",
+        text=[f"{v:.3f}" for v in trend_df["ndwi_change"]],
+        textposition="outside",
+        textfont=dict(color="#ffffff", family="DM Sans", size=11),
+        cliponaxis=False,
     ))
     fig.add_trace(go.Bar(
         name="Soil Water Change",
         x=trend_df["Monitored Facility"],
         y=trend_df["soil_moisture_change"],
-        marker_color="#38ef7d"
+        marker_color="#38ef7d",
+        text=[f"{v:.3f}" for v in trend_df["soil_moisture_change"]],
+        textposition="outside",
+        textfont=dict(color="#ffffff", family="DM Sans", size=11),
+        cliponaxis=False,
     ))
 
-    fig.update_layout(barmode="group", height=540, xaxis_tickangle=-25)
+    fig.update_layout(barmode="group", height=560, xaxis_tickangle=0)
     st.plotly_chart(style_figure(fig), use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Environmental Indicator Comparison Table</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Formal labels are used for presentation clarity.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Top 10 facilities only. Formal labels are used for presentation clarity.</div>', unsafe_allow_html=True)
 
     table = trend_df[
         ["Monitored Facility", "lst_change", "ndwi_change", "soil_moisture_change", "Risk Classification", "Change Direction"]
@@ -1029,7 +1106,7 @@ elif page == "Environmental Dynamics":
         "ndwi_change": "Water Availability Change",
         "soil_moisture_change": "Soil Water Change",
     })
-    st.dataframe(table, use_container_width=True, hide_index=True, height=min(440, 78 + len(table) * 38))
+    st.dataframe(table, use_container_width=True, hide_index=True, height=table_height(len(table)))
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -1039,7 +1116,7 @@ elif page == "Predictive Outlook":
     selected_site = st.selectbox("Select Facility for Outlook", df["Monitored Facility"].tolist())
     row = df[df["Monitored Facility"] == selected_site].iloc[0]
 
-    left, right = st.columns([0.64, 0.36])
+    left, right = st.columns([0.62, 0.38])
 
     with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1072,12 +1149,12 @@ elif page == "Predictive Outlook":
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Forward Monitoring Priority Table</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">Facilities ranked for continued environmental monitoring.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Top 10 facilities ranked for continued environmental monitoring.</div>', unsafe_allow_html=True)
 
-    focus = df.sort_values("Priority Score", ascending=False)[
+    focus = df.sort_values("Priority Score", ascending=False).head(10)[
         ["Monitored Facility", "Priority Score", "Risk Classification", "Change Direction", "Risk Outlook"]
     ]
-    st.dataframe(focus, use_container_width=True, hide_index=True, height=min(440, 78 + len(focus) * 38))
+    st.dataframe(focus, use_container_width=True, hide_index=True, height=table_height(len(focus)))
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -1093,7 +1170,7 @@ else:
     with k2:
         render_kpi("Risk Outlook", row["Risk Outlook"], "Derived from observed change signals", "cyan")
     with k3:
-        render_kpi("Priority Score", f"{row['Priority Score']:.1f}", "Calculated from ECI and ESS ranks", "green")
+        render_kpi("Priority Score", f"{int(round(row['Priority Score']))}", "Calculated from ECI and ESS ranks", "green")
 
     left, right = st.columns([0.58, 0.42])
 
@@ -1104,9 +1181,7 @@ else:
             '<div class="section-subtitle">Action cards are selected from environmental change signals available in the CSV dataset.</div>',
             unsafe_allow_html=True
         )
-        st.markdown('<div class="recommend-grid">', unsafe_allow_html=True)
         render_recommendation_cards(row)
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
