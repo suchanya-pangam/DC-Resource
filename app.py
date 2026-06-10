@@ -1,788 +1,485 @@
-import os
-from pathlib import Path
-
+import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit as st
+from pathlib import Path
 
-# =========================================================
-# DC-Resource Intelligence Platform
-# New file: dc_resource_dashboard.py
-# Run: python -m streamlit run dc_resource_dashboard.py
-# =========================================================
+st.set_page_config(page_title="DC-Resource Intelligence Platform", page_icon="🛡️", layout="wide", initial_sidebar_state="expanded")
 
-st.set_page_config(
-    page_title="DC-Resource Intelligence Platform",
-    page_icon="🌐",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# -----------------------------
-# Global Style: clone dashboard layout
-# -----------------------------
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-    html, body, [class*="css"], .stApp {
-        font-family: 'Inter', sans-serif;
-        background: #F4F7FB;
-        color: #0F172A;
-    }
-
-    .block-container {
-        padding-top: 1.05rem !important;
-        padding-left: 1.15rem !important;
-        padding-right: 1.15rem !important;
-        padding-bottom: 1.2rem !important;
-        max-width: 100% !important;
-    }
-
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #071A36 0%, #0B2447 100%);
-        min-width: 250px !important;
-        max-width: 250px !important;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: #EAF2FF !important;
-    }
-
-    [data-testid="stSidebar"] .stButton > button {
-        width: 100%;
-        height: 42px;
-        border-radius: 12px;
-        background: transparent;
-        border: 1px solid rgba(255,255,255,0.08);
-        color: #DCEBFF !important;
-        text-align: left;
-        padding-left: 14px;
-        font-weight: 600;
-    }
-
-    [data-testid="stSidebar"] .stButton > button:hover {
-        background: #2563EB;
-        border-color: #2563EB;
-        color: white !important;
-    }
-
-    [data-testid="stSidebar"] .stSelectbox, [data-testid="stSidebar"] .stMultiSelect {
-        background: transparent !important;
-    }
-
-    div[data-testid="stVerticalBlock"] { gap: 0.75rem; }
-    div[data-testid="stHorizontalBlock"] { gap: 0.9rem; align-items: stretch; }
-
-    .top-header {
-        background: #FFFFFF;
-        border: 1px solid #E5EAF2;
-        border-radius: 22px;
-        padding: 18px 22px;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-    }
-
-    .title-main {
-        margin: 0;
-        font-size: 30px;
-        line-height: 1.15;
-        font-weight: 800;
-        color: #0B1220;
-        letter-spacing: -0.02em;
-    }
-
-    .title-sub {
-        margin-top: 6px;
-        font-size: 13px;
-        color: #64748B;
-        font-weight: 500;
-    }
-
-    .mini-pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        height: 30px;
-        padding: 0 12px;
-        border-radius: 999px;
-        background: #EFF6FF;
-        color: #2563EB;
-        font-size: 12px;
-        font-weight: 800;
-        border: 1px solid #DBEAFE;
-        white-space: nowrap;
-    }
-
-    .card {
-        background: #FFFFFF;
-        border: 1px solid #E5EAF2;
-        border-radius: 20px;
-        padding: 16px 17px;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-        height: 100%;
-    }
-
-    .metric-card {
-        background: #FFFFFF;
-        border: 1px solid #E5EAF2;
-        border-radius: 18px;
-        padding: 15px 16px;
-        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
-        min-height: 112px;
-    }
-
-    .metric-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        align-items: flex-start;
-    }
-
-    .metric-title {
-        font-size: 12px;
-        color: #64748B;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        margin-bottom: 7px;
-    }
-
-    .metric-value {
-        font-size: 29px;
-        line-height: 1.05;
-        color: #0F172A;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-    }
-
-    .metric-subtitle {
-        font-size: 12px;
-        color: #94A3B8;
-        margin-top: 8px;
-        font-weight: 600;
-    }
-
-    .metric-icon {
-        width: 42px;
-        height: 42px;
-        border-radius: 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        background: #EFF6FF;
-        color: #2563EB;
-    }
-
-    .section-title {
-        font-size: 16px;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 4px;
-        letter-spacing: -0.01em;
-    }
-
-    .section-subtitle {
-        font-size: 12px;
-        color: #64748B;
-        margin-bottom: 10px;
-        font-weight: 600;
-    }
-
-    .detail-title {
-        font-size: 20px;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 2px;
-    }
-
-    .detail-subtitle {
-        font-size: 12px;
-        color: #64748B;
-        font-weight: 700;
-        margin-bottom: 14px;
-    }
-
-    .score-box {
-        background: #F8FAFC;
-        border: 1px solid #E5EAF2;
-        border-radius: 16px;
-        padding: 14px;
-        min-height: 96px;
-    }
-
-    .score-label {
-        font-size: 11px;
-        color: #64748B;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-
-    .score-value {
-        font-size: 25px;
-        line-height: 1.05;
-        font-weight: 800;
-        color: #0F172A;
-        margin-top: 7px;
-    }
-
-    .badge {
-        display: inline-flex;
-        padding: 5px 10px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 800;
-        margin-top: 8px;
-        border: 1px solid transparent;
-    }
-    .badge-low { background: #DCFCE7; color: #15803D; border-color: #BBF7D0; }
-    .badge-watch { background: #FEF3C7; color: #B45309; border-color: #FDE68A; }
-    .badge-concern { background: #FFEDD5; color: #C2410C; border-color: #FDBA74; }
-    .badge-critical { background: #FEE2E2; color: #B91C1C; border-color: #FECACA; }
-
-    .alert-box {
-        background: #FFF7ED;
-        border: 1px solid #FED7AA;
-        border-radius: 16px;
-        padding: 13px 14px;
-        color: #9A3412;
-        font-size: 12px;
-        line-height: 1.55;
-        font-weight: 650;
-    }
-
-    .nav-logo {
-        padding: 16px 4px 12px 4px;
-    }
-    .nav-logo-title {
-        font-size: 22px;
-        font-weight: 850;
-        color: white !important;
-        letter-spacing: -0.03em;
-        line-height: 1.05;
-    }
-    .nav-logo-sub {
-        font-size: 11px;
-        color: #AFC7E9 !important;
-        margin-top: 7px;
-        font-weight: 600;
-        line-height: 1.4;
-    }
-    .nav-label {
-        font-size: 11px;
-        color: #8EAAD0 !important;
-        text-transform: uppercase;
-        letter-spacing: .08em;
-        font-weight: 800;
-        margin: 14px 0 6px 2px;
-    }
-
-    .filter-label {
-        font-size: 11px;
-        color: #64748B;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        margin-bottom: -4px;
-    }
-
-    .stSelectbox label, .stMultiSelect label, .stRadio label {
-        font-size: 12px !important;
-        font-weight: 800 !important;
-        color: #475569 !important;
-    }
-
-    [data-testid="stDataFrame"] {
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid #E5EAF2;
-    }
-
-    .js-plotly-plot, .plotly, .plot-container {
-        border-radius: 16px;
-    }
-
-    hr { margin: 0.7rem 0; }
-
-    /* hide Streamlit chrome */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-
-    /* make sidebar filters readable */
-    [data-testid="stSidebar"] div[data-baseweb="select"] span,
-    [data-testid="stSidebar"] div[data-baseweb="select"] div {
-        color: #0F172A !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# -----------------------------
-# Helpers
-# -----------------------------
-DATA_FILE = "geosentinel_monthly_dashboard_data.csv"
+CSV_FILE = "geosentinel_monthly_dashboard_data.csv"
 
 @st.cache_data
 def load_data():
-    possible_paths = [
-        Path(DATA_FILE),
-        Path(__file__).parent / DATA_FILE,
-        Path.cwd() / DATA_FILE,
-        Path("/mnt/data") / DATA_FILE,
-    ]
-    for p in possible_paths:
-        if p.exists():
-            df = pd.read_csv(p)
-            break
-    else:
-        st.error(f"ไม่พบไฟล์ {DATA_FILE} กรุณาวาง CSV ไว้ในโฟลเดอร์เดียวกับไฟล์ Python นี้")
+    p = Path(CSV_FILE)
+    if not p.exists():
+        st.error(f"ไม่พบไฟล์ {CSV_FILE} กรุณาวางไฟล์ CSV ไว้ในโฟลเดอร์เดียวกับไฟล์นี้")
         st.stop()
-
-    df["year_month_date"] = pd.to_datetime(df["year_month"], errors="coerce")
-    df = df.sort_values(["data_center_name", "year_month_date"]).reset_index(drop=True)
+    df = pd.read_csv(p)
+    df["Date"] = pd.to_datetime(df["year_month"] + "-01")
+    df["Year"] = df["Date"].dt.year.astype(int)
+    df["Month"] = df["Date"].dt.strftime("%Y-%m")
+    df["Data Center"] = df["data_center_name"].str.replace("_", " ", regex=False)
     return df
 
+df = load_data()
 
-def risk_badge_class(level):
-    level = str(level).lower()
-    if "critical" in level:
-        return "badge-critical"
-    if "concern" in level:
-        return "badge-concern"
-    if "watch" in level:
-        return "badge-watch"
-    return "badge-low"
+# ---------- Session filters ----------
+def init_state(key, value):
+    if key not in st.session_state:
+        st.session_state[key] = value
 
+init_state("selected_year", int(df["Year"].max()))
+init_state("selected_month", str(df["Month"].max()))
+init_state("selected_risk", "All")
+init_state("selected_page", "Overview")
+init_state("selected_center", df.sort_values("risk_score", ascending=False).iloc[0]["data_center_name"])
 
-def risk_color(level):
-    level = str(level).lower()
-    if "critical" in level:
-        return "#EF4444"
-    if "concern" in level:
-        return "#F97316"
-    if "watch" in level:
-        return "#F59E0B"
-    return "#22C55E"
-
-
-def score_color(value):
-    try:
-        v = float(value)
-    except Exception:
-        return "#64748B"
-    if v >= 75:
-        return "#EF4444"
-    if v >= 55:
-        return "#F97316"
-    if v >= 35:
-        return "#F59E0B"
-    return "#22C55E"
-
-
-def card_metric(title, value, subtitle, icon):
-    return f"""
-    <div class="metric-card">
-      <div class="metric-row">
-        <div>
-          <div class="metric-title">{title}</div>
-          <div class="metric-value">{value}</div>
-          <div class="metric-subtitle">{subtitle}</div>
-        </div>
-        <div class="metric-icon">{icon}</div>
-      </div>
-    </div>
+# ---------- CSS: clone target layout ----------
+st.markdown(
     """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
+:root{
+    --navy:#061B33;
+    --navy2:#08213E;
+    --blue:#1167E8;
+    --text:#0F172A;
+    --muted:#64748B;
+    --border:#DCE6F2;
+    --bg:#F3F7FB;
+    --card:#FFFFFF;
+    --danger:#E11D48;
+    --orange:#F97316;
+    --yellow:#FACC15;
+    --green:#22C55E;
+    --purple:#7C3AED;
+}
+html, body, [class*="css"], [data-testid="stAppViewContainer"]{font-family:'Inter',sans-serif;}
+[data-testid="stAppViewContainer"]{background:var(--bg);}
+.main .block-container{
+    max-width: 100% !important;
+    padding: 0.25rem 0.95rem 0.8rem 0.95rem !important;
+}
+[data-testid="stSidebar"]{
+    background:linear-gradient(180deg,#04172C 0%,#08213E 100%) !important;
+    min-width:220px !important;
+    max-width:220px !important;
+}
+[data-testid="stSidebar"] *{color:#EAF2FF !important;}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p{margin:0;}
+[data-testid="stSidebar"] div.stButton > button{
+    width:100%; border:1px solid rgba(255,255,255,.12); background:rgba(14,76,145,.22);
+    color:#EAF2FF; border-radius:12px; padding:.78rem .75rem; text-align:left; font-weight:700;
+}
+[data-testid="stSidebar"] div.stButton > button:hover{background:#0B5ED7;border-color:#0B5ED7;color:#fff;}
 
-def plot_map(df, score_col, title, color_scale):
-    center_lat = df["latitude"].mean() if len(df) else 0
-    center_lon = df["longitude"].mean() if len(df) else 0
+button[kind="secondary"]{
+    border-radius:14px !important; border:1px solid #D8E4F2 !important; background:white !important;
+    color:#2563EB !important; font-weight:800 !important; box-shadow:0 6px 16px rgba(15,23,42,.04) !important;
+}
+button[kind="secondary"]:hover{border-color:#2563EB !important; background:#EFF6FF !important;}
+
+h1,h2,h3,p{margin:0;}
+.hero{
+    background:#fff; border:1px solid var(--border); border-radius:18px; padding:20px 22px;
+    box-shadow:0 12px 30px rgba(15,23,42,.06); min-height:100px;
+}
+.hero-title{font-size:30px;line-height:1.1;font-weight:900;color:#0B1226;letter-spacing:-1.2px;}
+.hero-sub{font-size:13px;color:#53667E;font-weight:600;margin-top:10px;}
+.pill-row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+.pill{background:#F1F7FF;color:#1863DF;border:1px solid #D7E8FF;border-radius:14px;padding:10px 14px;font-weight:800;font-size:13px;display:inline-flex;align-items:center;gap:7px;}
+
+.card{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 28px rgba(15,23,42,.05);}
+.kpi{height:120px;padding:15px 16px;position:relative;overflow:hidden;}
+.kpi-icon{position:absolute;right:14px;top:16px;width:44px;height:44px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:900;}
+.kpi-label{font-size:12px;text-transform:uppercase;letter-spacing:.9px;color:#53667E;font-weight:900;line-height:1.55;max-width:135px;}
+.kpi-value{font-size:29px;font-weight:900;color:#081226;margin-top:10px;letter-spacing:-.8px;line-height:1;}
+.kpi-sub{font-size:12px;color:#8A9AB0;font-weight:800;margin-top:12px;line-height:1.4;}
+.section-card{padding:14px 15px;margin-top:12px;}
+.section-title{font-size:15px;font-weight:900;color:#0F172A;display:flex;align-items:center;gap:8px;}
+.section-sub{font-size:12px;color:#64748B;font-weight:700;margin-top:7px;}
+.detail-title{font-size:20px;font-weight:900;color:#0F172A;margin-bottom:8px;}
+.breadcrumb{font-size:11px;color:#6B7C91;font-weight:800;margin-bottom:12px;}
+.score-card{padding:16px;min-height:112px;}
+.score-label{font-size:11px;text-transform:uppercase;color:#53667E;letter-spacing:.8px;font-weight:900;}
+.score-value{font-size:29px;font-weight:900;color:#0F172A;margin-top:10px;}
+.badge{display:inline-block;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:900;margin-left:6px;}
+.badge-danger{background:#FFE4E8;color:#BE123C;}
+.badge-orange{background:#FFEDD5;color:#C2410C;}
+.badge-yellow{background:#FEF3C7;color:#A16207;}
+.badge-green{background:#DCFCE7;color:#15803D;}
+.alert-box{background:#FFF1F2;border:1px solid #FDA4AF;border-radius:14px;padding:15px;display:flex;align-items:center;gap:16px;margin-top:12px;}
+.alert-icon{font-size:37px;color:#E11D48;}
+.alert-title{font-size:15px;font-weight:900;color:#0F172A;margin-bottom:6px;}
+.alert-text{font-size:12px;color:#1F2937;line-height:1.55;font-weight:600;}
+.big-risk{background:#EF4444;color:white;border-radius:9px;padding:11px 16px;font-weight:900;text-align:center;font-size:18px;letter-spacing:.8px;}
+.mini-card{padding:15px;min-height:96px;}
+.mini-title{font-size:13px;font-weight:900;color:#0F172A;margin-bottom:6px;}
+.mini-text{font-size:12px;color:#475569;line-height:1.5;font-weight:600;}
+.table-wrap{background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 28px rgba(15,23,42,.05);padding:12px;margin-top:12px;}
+table.clone-table{width:100%;border-collapse:collapse;font-size:12px;}
+table.clone-table th{color:#52667D;text-align:left;font-weight:900;padding:9px 8px;border-bottom:1px solid #E5EDF6;font-size:11px;}
+table.clone-table td{padding:9px 8px;border-bottom:1px solid #EDF2F7;color:#0F172A;font-weight:600;}
+.footer{background:linear-gradient(90deg,#061B33,#08213E);color:white;border-radius:12px;padding:13px 16px;margin-top:12px;font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
+.stPlotlyChart{background:#fff;border-radius:0 0 16px 16px;}
+[data-testid="stVerticalBlock"]{gap:.55rem !important;}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------- Helpers ----------
+def level_from_score(score):
+    if score >= 75: return "Critical"
+    if score >= 50: return "Concern"
+    if score >= 25: return "Watch"
+    return "Stable"
+
+def risk_color(level_or_score):
+    if isinstance(level_or_score, (int, float)):
+        level = level_from_score(level_or_score)
+    else:
+        level = str(level_or_score)
+    return {"Critical":"#E11D48", "Concern":"#F97316", "Watch":"#FACC15", "Stable":"#22C55E", "Low":"#22C55E"}.get(level, "#64748B")
+
+def badge_class(level):
+    level = str(level)
+    if level == "Critical": return "badge-danger"
+    if level == "Concern": return "badge-orange"
+    if level == "Watch": return "badge-yellow"
+    return "badge-green"
+
+def display_name(name):
+    return str(name).replace("_", " ")
+
+def compact_name(name):
+    return display_name(name).replace("Microsoft SanAntonio TX", "Microsoft SanAntonio TX")
+
+def make_map(data, value_col, title):
+    color_scale = [[0, "#22C55E"], [0.35, "#FACC15"], [0.65, "#F97316"], [1, "#E11D48"]]
     fig = px.scatter_mapbox(
-        df,
+        data,
         lat="latitude",
         lon="longitude",
-        color=score_col,
-        size="risk_score",
-        size_max=19,
-        hover_name="data_center_name",
-        hover_data={
-            "latitude": ":.3f",
-            "longitude": ":.3f",
-            score_col: ":.2f",
-            "risk_score": ":.2f",
-            "risk_level": True,
-        },
+        size=value_col,
+        color=value_col,
         color_continuous_scale=color_scale,
-        zoom=2.35,
-        center={"lat": center_lat, "lon": center_lon},
-        height=285,
+        hover_name="Data Center",
+        hover_data={"latitude":":.3f", "longitude":":.3f", value_col:":.2f"},
+        zoom=2.55,
+        height=280,
     )
     fig.update_layout(
         mapbox_style="carto-positron",
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        coloraxis_colorbar=dict(title="Score", thickness=10, len=0.75),
-        font=dict(family="Inter", size=11, color="#334155"),
+        coloraxis_colorbar=dict(title="Score", thickness=13, len=.66, y=.48),
+        font=dict(family="Inter", size=12, color="#64748B"),
     )
+    fig.update_traces(marker=dict(opacity=.90, sizemin=10))
     return fig
 
-
-def line_chart(df, y_col, title, color=None):
-    fig = px.line(df, x="year_month_date", y=y_col, markers=True, height=210)
-    fig.update_traces(line=dict(width=3), marker=dict(size=6))
+def line_chart(center_df, y, color, ytitle):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=center_df["Date"], y=center_df[y], mode="lines+markers",
+        line=dict(width=3, color=color), marker=dict(size=5, color=color), fill="tozeroy",
+        fillcolor="rgba(239,68,68,.10)" if color == "#E11D48" else "rgba(37,99,235,.10)"
+    ))
     fig.update_layout(
-        margin=dict(l=10, r=10, t=8, b=5),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_title="",
-        yaxis_title="",
-        font=dict(family="Inter", size=11, color="#334155"),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(gridcolor="#E5EAF2"),
+        height=210, margin=dict(l=35,r=16,t=8,b=28),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=True, gridcolor="#E9EFF6", tickfont=dict(size=10)),
+        yaxis=dict(title=ytitle, showgrid=True, gridcolor="#E9EFF6", tickfont=dict(size=10), titlefont=dict(size=10)),
+        font=dict(family="Inter", color="#64748B"),
     )
     return fig
 
+def table_html(data, score_col, title_col):
+    rows = []
+    for i, (_, r) in enumerate(data.iterrows(), 1):
+        lvl = r.get("risk_level", level_from_score(r[score_col]))
+        rows.append(f"""
+        <tr>
+            <td>{i}</td>
+            <td>{display_name(r['data_center_name'])}</td>
+            <td>{r[score_col]:.2f}</td>
+            <td><span class='badge {badge_class(lvl)}'>{lvl}</span></td>
+            <td><span style='color:{risk_color(lvl)};font-weight:900'>●</span></td>
+        </tr>
+        """)
+    return f"""
+    <div class='table-wrap'>
+        <div class='section-title'>▧ {title_col}</div>
+        <table class='clone-table'>
+            <thead><tr><th>Rank</th><th>Data Center</th><th>Score</th><th>Level</th><th>Status</th></tr></thead>
+            <tbody>{''.join(rows)}</tbody>
+        </table>
+    </div>
+    """
 
-def readable_table(df, cols):
-    rename_map = {
-        "data_center_name": "Data Center",
-        "year_month": "Month",
-        "mean_LST_C": "Land Surface Temperature",
-        "mean_NDWI": "Water Availability",
-        "mean_NDVI": "Vegetation Health",
-        "mean_NDBI": "Urbanization Index",
-        "precipitation_mm": "Precipitation",
-        "soil_moisture": "Soil Moisture",
-        "lst_change_1y": "Temperature Change",
-        "ndwi_change_1y": "Water Change",
-        "ndvi_change_1y": "Vegetation Change",
-        "ndbi_change_1y": "Urbanization Change",
-        "ECI_score": "ECI Score",
-        "ESS_score": "ESS Score",
-        "risk_score": "Risk Score",
-        "risk_level": "Risk Level",
-        "forecast_risk_score_6m": "Forecast Risk 6 Months",
-        "forecast_risk_level_6m": "Forecast Level 6 Months",
-        "forecast_risk_score_12m": "Forecast Risk 12 Months",
-        "forecast_risk_level_12m": "Forecast Level 12 Months",
-        "latitude": "Latitude",
-        "longitude": "Longitude",
-    }
-    out = df[cols].copy()
-    for c in out.columns:
-        if pd.api.types.is_numeric_dtype(out[c]):
-            out[c] = out[c].round(2)
-    return out.rename(columns=rename_map)
+def kpi_card(label, value, sub, icon, bg, color):
+    return f"""
+    <div class='card kpi'>
+        <div class='kpi-icon' style='background:{bg}; color:{color};'>{icon}</div>
+        <div class='kpi-label'>{label}</div>
+        <div class='kpi-value'>{value}</div>
+        <div class='kpi-sub'>{sub}</div>
+    </div>
+    """
 
-
-# -----------------------------
-# Data
-# -----------------------------
-df = load_data()
-
-# Latest month default
-months = sorted(df["year_month"].dropna().unique().tolist())
-risk_levels = sorted(df["risk_level"].dropna().unique().tolist())
-data_centers = sorted(df["data_center_name"].dropna().unique().tolist())
-
-# -----------------------------
-# Sidebar: clickable menu + filters
-# -----------------------------
+# ---------- Sidebar navigation and filters ----------
 with st.sidebar:
+    st.markdown("""
+    <div style='height:26px'></div>
+    <div style='font-size:20px;font-weight:900;line-height:1.05;margin-bottom:8px;'>🛡️ DC-Resource<br>Intelligence</div>
+    <div style='font-size:11px;color:#B6C6DA!important;font-weight:700;line-height:1.45;margin-bottom:28px;'>GeoAI Environmental Monitoring<br>for Data Centers</div>
+    <div style='font-size:11px;color:#8EA7C5!important;letter-spacing:1.6px;font-weight:900;margin-bottom:10px;'>NAVIGATION</div>
+    """, unsafe_allow_html=True)
+    pages = ["Overview", "Hotspot Detail", "Alerts", "Data Centers", "Trends", "Forecast", "Reports", "About"]
+    icons = ["▣", "◎", "△", "⌂", "↗", "◷", "▤", "ⓘ"]
+    for icon, page in zip(icons, pages):
+        if st.button(f"{icon} {page}", key=f"page_{page}"):
+            st.session_state.selected_page = page
+            st.rerun()
+
+    st.markdown("<div style='height:18px'></div><div style='font-size:11px;color:#8EA7C5!important;letter-spacing:1.6px;font-weight:900;margin-bottom:10px;'>FILTERS</div>", unsafe_allow_html=True)
+    years = sorted(df["Year"].unique().tolist())
+    for y in years:
+        if st.button(f"Year {y}", key=f"year_{y}"):
+            st.session_state.selected_year = int(y)
+            months_y = sorted(df.loc[df["Year"].eq(y), "Month"].unique())
+            st.session_state.selected_month = months_y[-1]
+            st.rerun()
+
+    risks = ["All"] + sorted(df["risk_level"].dropna().unique().tolist())
+    for r in risks:
+        if st.button(f"Risk {r}", key=f"risk_{r}"):
+            st.session_state.selected_risk = r
+            st.rerun()
+
+    st.markdown("""
+    <div style='position:fixed;bottom:18px;width:172px;border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:14px;background:rgba(255,255,255,.04);'>
+        <div style='font-size:12px;font-weight:900;'>Data Source</div>
+        <div style='font-size:11px;color:#B6C6DA!important;font-weight:700;margin-top:8px;line-height:1.45;'>Google Earth Engine<br>2020 – 2025</div>
+        <div style='font-size:30px;margin-top:12px;text-align:center;'>🛰️</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ---------- Apply filters ----------
+available_months = sorted(df.loc[df["Year"].eq(st.session_state.selected_year), "Month"].unique().tolist())
+if st.session_state.selected_month not in available_months:
+    st.session_state.selected_month = available_months[-1]
+
+# Main top filter buttons: months in selected year
+header_left, header_right = st.columns([5.8, 2.4], gap="medium")
+with header_left:
     st.markdown(
         """
-        <div class="nav-logo">
-            <div class="nav-logo-title">DC-Resource<br>Intelligence</div>
-            <div class="nav-logo-sub">GeoAI Environmental Monitoring for Data Centers</div>
+        <div class='hero'>
+            <div class='hero-title'>DC-Resource Intelligence Platform</div>
+            <div class='hero-sub'>GeoAI-Based Environmental Monitoring and Resource Risk Assessment for Data Centers</div>
         </div>
-        <div class="nav-label">Navigation</div>
         """,
         unsafe_allow_html=True,
     )
+with header_right:
+    st.markdown("<div class='pill-row'>", unsafe_allow_html=True)
+    st.markdown(f"<span class='pill'>📅 Year: {st.session_state.selected_year}</span>", unsafe_allow_html=True)
+    st.markdown(f"<span class='pill'>📌 Risk: {st.session_state.selected_risk}</span>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.write("")
+    month_cols = st.columns(3, gap="small")
+    show_months = available_months[-6:]
+    for i, m in enumerate(show_months):
+        with month_cols[i % 3]:
+            label = m if m != st.session_state.selected_month else f"✓ {m}"
+            if st.button(label, key=f"month_{m}"):
+                st.session_state.selected_month = m
+                st.rerun()
 
-    if "page" not in st.session_state:
-        st.session_state.page = "Overview"
-
-    pages = ["Overview", "Hotspot Detail", "Alerts", "Data Centers", "Trends", "Forecast", "Reports", "About"]
-    icons = ["▣", "◎", "⚠", "⌂", "↗", "◷", "▤", "ⓘ"]
-    for icon, page in zip(icons, pages):
-        label = f"{icon}  {page}"
-        if st.button(label, key=f"nav_{page}"):
-            st.session_state.page = page
-
-    st.markdown("<div class='nav-label'>Filters</div>", unsafe_allow_html=True)
-
-    selected_month = st.selectbox("Month", months, index=len(months)-1, key="filter_month")
-    selected_risk = st.multiselect("Risk Level", risk_levels, default=risk_levels, key="filter_risk")
-    selected_centers = st.multiselect("Data Center", data_centers, default=data_centers, key="filter_center")
-    sort_by_label = st.selectbox(
-        "Sort By",
-        ["Risk Score", "ECI Score", "ESS Score", "Land Surface Temperature", "Water Availability"],
-        key="filter_sort",
-    )
-
-    st.markdown("<div class='nav-label'>Status</div>", unsafe_allow_html=True)
-    st.caption("All filters are active and connected to every card, map, table, and chart.")
-
-sort_map = {
-    "Risk Score": "risk_score",
-    "ECI Score": "ECI_score",
-    "ESS Score": "ESS_score",
-    "Land Surface Temperature": "mean_LST_C",
-    "Water Availability": "mean_NDWI",
-}
-sort_col = sort_map[sort_by_label]
-
-filtered = df[
-    (df["year_month"] == selected_month)
-    & (df["risk_level"].isin(selected_risk))
-    & (df["data_center_name"].isin(selected_centers))
-].copy()
-
+filtered = df[df["Month"].eq(st.session_state.selected_month)].copy()
+if st.session_state.selected_risk != "All":
+    filtered = filtered[filtered["risk_level"].eq(st.session_state.selected_risk)].copy()
 if filtered.empty:
-    st.warning("ไม่มีข้อมูลตาม Filter ที่เลือก กรุณาปรับตัวกรองด้านซ้าย")
-    st.stop()
+    filtered = df[df["Month"].eq(st.session_state.selected_month)].copy()
 
-filtered = filtered.sort_values(sort_col, ascending=False).reset_index(drop=True)
-selected_detail = filtered.iloc[0]["data_center_name"]
+# Choose hotspot after filter
+if st.session_state.selected_center not in filtered["data_center_name"].values:
+    st.session_state.selected_center = filtered.sort_values("risk_score", ascending=False).iloc[0]["data_center_name"]
 
-# detail center changes with page or filter; also selectable in detail panel
-# -----------------------------
-# Top Header
-# -----------------------------
-st.markdown(
-    f"""
-    <div class="top-header">
-        <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start;">
-            <div>
-                <h1 class="title-main">DC-Resource Intelligence Platform</h1>
-                <div class="title-sub">GeoAI-Based Environmental Monitoring and Resource Risk Assessment for Data Centers</div>
-            </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-                <span class="mini-pill">Month: {selected_month}</span>
-                <span class="mini-pill">{len(filtered)} Active Records</span>
-                <span class="mini-pill">{st.session_state.page}</span>
-            </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+top_hotspot = filtered.sort_values("risk_score", ascending=False).iloc[0]
+monitored = filtered["data_center_name"].nunique()
+critical_eci = int((filtered["ECI_score"] >= filtered["ECI_score"].quantile(.85)).sum())
+critical_ess = int((filtered["ESS_score"] >= filtered["ESS_score"].quantile(.85)).sum())
 
-# -----------------------------
-# Main Horizontal Layout: left main + right detail
-# -----------------------------
-main_col, detail_col = st.columns([1.92, 0.9], gap="medium")
+# ---------- Horizontal app body ----------
+main_col, detail_col = st.columns([1.55, 1.20], gap="medium")
 
 with main_col:
-    # KPI row: horizontal exactly
-    total_dc = filtered["data_center_name"].nunique()
-    critical_eci = int((filtered["ECI_score"] >= filtered["ECI_score"].quantile(0.80)).sum())
-    critical_ess = int((filtered["ESS_score"] >= filtered["ESS_score"].quantile(0.80)).sum())
-    top_hotspot = str(filtered.iloc[0]["data_center_name"]).replace("_", " ")
-
-    k1, k2, k3, k4 = st.columns(4, gap="medium")
+    k1, k2, k3, k4 = st.columns(4, gap="small")
     with k1:
-        st.markdown(card_metric("Monitored Data Centers", total_dc, "Filtered active sites", "⌂"), unsafe_allow_html=True)
+        st.markdown(kpi_card("Monitored<br>Data Centers", monitored, "Across selected filter", "▦", "#E8F3FF", "#2563EB"), unsafe_allow_html=True)
     with k2:
-        st.markdown(card_metric("Critical ECI Areas", critical_eci, "Highest environmental change", "↯"), unsafe_allow_html=True)
+        st.markdown(kpi_card("Critical ECI<br>Areas", critical_eci, "High rate of change", "↗", "#FFE5EA", "#E11D48"), unsafe_allow_html=True)
     with k3:
-        st.markdown(card_metric("Critical ESS Areas", critical_ess, "Highest environmental stress", "◌"), unsafe_allow_html=True)
+        st.markdown(kpi_card("Critical ESS<br>Areas", critical_ess, "High environmental stress", "⚠", "#FFEEDB", "#F97316"), unsafe_allow_html=True)
     with k4:
-        st.markdown(card_metric("Top Hotspot", top_hotspot[:18], "Ranked by selected filter", "⚠"), unsafe_allow_html=True)
+        st.markdown(kpi_card("Top Hotspot", display_name(top_hotspot["data_center_name"]).split()[0] + "<br>" + " ".join(display_name(top_hotspot["data_center_name"]).split()[1:])[:15], "Ranked by selected filter", "⌖", "#EEE7FF", "#7C3AED"), unsafe_allow_html=True)
 
-    # Map row: horizontal side-by-side
     map1, map2 = st.columns(2, gap="medium")
     with map1:
-        st.markdown("<div class='card'><div class='section-title'>ECI Map</div><div class='section-subtitle'>Environmental Change Index by data center location</div>", unsafe_allow_html=True)
-        st.plotly_chart(plot_map(filtered, "ECI_score", "ECI Map", "YlOrRd"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div class='card section-card' style='border-bottom-left-radius:0;border-bottom-right-radius:0;'>
+            <div class='section-title'>▧ ECI Map</div>
+            <div class='section-sub'>Environmental Change Index by data center location</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(make_map(filtered, "ECI_score", "ECI Map"), use_container_width=True, config={"displayModeBar": False})
     with map2:
-        st.markdown("<div class='card'><div class='section-title'>ESS Map</div><div class='section-subtitle'>Environmental Stress Score by data center location</div>", unsafe_allow_html=True)
-        st.plotly_chart(plot_map(filtered, "ESS_score", "ESS Map", "OrRd"), use_container_width=True, config={"displayModeBar": False})
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div class='card section-card' style='border-bottom-left-radius:0;border-bottom-right-radius:0;'>
+            <div class='section-title'>▧ ESS Map</div>
+            <div class='section-sub'>Environmental Stress Score by data center location</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(make_map(filtered, "ESS_score", "ESS Map"), use_container_width=True, config={"displayModeBar": False})
 
-    # Tables row: horizontal side-by-side
     t1, t2 = st.columns(2, gap="medium")
     with t1:
-        st.markdown("<div class='card'><div class='section-title'>Top 5 by Environmental Change</div><div class='section-subtitle'>Highest ECI Score in selected month</div>", unsafe_allow_html=True)
-        table_eci = readable_table(
-            filtered.nlargest(5, "ECI_score"),
-            ["data_center_name", "ECI_score", "risk_score", "risk_level"],
-        )
-        st.dataframe(table_eci, use_container_width=True, hide_index=True, height=210)
-        st.markdown("</div>", unsafe_allow_html=True)
+        top_eci = filtered.sort_values("ECI_score", ascending=False).head(5)
+        st.markdown(table_html(top_eci, "ECI_score", "Top 5 by Environmental Change"), unsafe_allow_html=True)
     with t2:
-        st.markdown("<div class='card'><div class='section-title'>Top 5 by Environmental Stress</div><div class='section-subtitle'>Highest ESS Score in selected month</div>", unsafe_allow_html=True)
-        table_ess = readable_table(
-            filtered.nlargest(5, "ESS_score"),
-            ["data_center_name", "ESS_score", "mean_LST_C", "mean_NDWI"],
-        )
-        st.dataframe(table_ess, use_container_width=True, hide_index=True, height=210)
-        st.markdown("</div>", unsafe_allow_html=True)
+        top_ess = filtered.sort_values("ESS_score", ascending=False).head(5)
+        st.markdown(table_html(top_ess, "ESS_score", "Top 5 by Environmental Stress"), unsafe_allow_html=True)
 
-    # Extra page content, controlled by clickable left menu
-    if st.session_state.page == "Data Centers":
-        st.markdown("<div class='card'><div class='section-title'>Data Center Records</div><div class='section-subtitle'>Filtered dataset with dashboard-ready column names</div>", unsafe_allow_html=True)
-        st.dataframe(
-            readable_table(
-                filtered,
-                [
-                    "data_center_name", "year_month", "latitude", "longitude", "mean_LST_C",
-                    "mean_NDWI", "mean_NDVI", "mean_NDBI", "ECI_score", "ESS_score",
-                    "risk_score", "risk_level", "forecast_risk_score_6m", "forecast_risk_score_12m"
-                ],
-            ),
-            use_container_width=True,
-            hide_index=True,
-            height=420,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    if st.session_state.page == "Trends":
-        st.markdown("<div class='card'><div class='section-title'>Portfolio Trend Overview</div><div class='section-subtitle'>Average monthly movement across selected data centers</div>", unsafe_allow_html=True)
-        trend_df = df[df["data_center_name"].isin(selected_centers)].groupby("year_month_date", as_index=False)[["mean_LST_C", "mean_NDWI", "ECI_score", "ESS_score", "risk_score"]].mean()
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=trend_df["year_month_date"], y=trend_df["risk_score"], mode="lines+markers", name="Risk Score"))
-        fig.add_trace(go.Scatter(x=trend_df["year_month_date"], y=trend_df["ECI_score"], mode="lines+markers", name="ECI Score"))
-        fig.add_trace(go.Scatter(x=trend_df["year_month_date"], y=trend_df["ESS_score"], mode="lines+markers", name="ESS Score"))
-        fig.update_layout(height=330, margin=dict(l=10, r=10, t=8, b=5), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h"), font=dict(family="Inter", size=11))
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    if st.session_state.page == "Forecast":
-        st.markdown("<div class='card'><div class='section-title'>AI Forecast Center</div><div class='section-subtitle'>Current, 6-month, and 12-month forecast risk comparison</div>", unsafe_allow_html=True)
-        forecast_view = filtered[["data_center_name", "risk_score", "forecast_risk_score_6m", "forecast_risk_score_12m", "risk_level", "forecast_risk_level_6m", "forecast_risk_level_12m"]].copy()
-        forecast_view = forecast_view.sort_values("forecast_risk_score_12m", ascending=False).head(12)
-        forecast_long = forecast_view.melt(
-            id_vars="data_center_name",
-            value_vars=["risk_score", "forecast_risk_score_6m", "forecast_risk_score_12m"],
-            var_name="Period",
-            value_name="Risk Score",
-        )
-        forecast_long["Period"] = forecast_long["Period"].map({
-            "risk_score": "Current",
-            "forecast_risk_score_6m": "6 Months",
-            "forecast_risk_score_12m": "12 Months",
-        })
-        fig = px.bar(forecast_long, x="data_center_name", y="Risk Score", color="Period", barmode="group", height=360)
-        fig.update_layout(margin=dict(l=10, r=10, t=8, b=5), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis_title="", font=dict(family="Inter", size=11))
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    if st.session_state.page == "Reports":
-        st.markdown("<div class='card'><div class='section-title'>Executive Report Summary</div><div class='section-subtitle'>Auto-generated summary from selected filters</div>", unsafe_allow_html=True)
-        avg_risk = filtered["risk_score"].mean()
-        avg_forecast = filtered["forecast_risk_score_12m"].mean()
-        trend_word = "increase" if avg_forecast > avg_risk else "remain stable or decrease"
-        st.markdown(
-            f"""
-            <div class="alert-box">
-            In {selected_month}, the platform monitors <b>{total_dc}</b> data center locations under the selected filter. 
-            The average current risk score is <b>{avg_risk:.2f}</b>, while the 12-month forecast average is <b>{avg_forecast:.2f}</b>. 
-            Overall risk is expected to <b>{trend_word}</b> based on ECI, ESS, and forecast indicators.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    if st.session_state.page == "About":
-        st.markdown("<div class='card'><div class='section-title'>About This Platform</div><div class='section-subtitle'>Innovation positioning for GeoAI Hackathon</div>", unsafe_allow_html=True)
-        st.markdown(
-            """
-            <div class="alert-box" style="background:#EFF6FF; border-color:#BFDBFE; color:#1E40AF;">
-            DC-Resource Intelligence Platform combines satellite-derived indicators, Environmental Change Index, Environmental Stress Score, Risk Engine, and AI-based 6–12 month forecasting to support proactive data center resource risk monitoring.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class='footer'>
+            <span>ⓘ GeoAI transforms satellite-derived environmental indicators into early warning insights for decision-makers.</span>
+            <span>ECI = environmental change | ESS = current environmental stress</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 with detail_col:
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("<div class='detail-title'>Hotspot Detail</div><div class='detail-subtitle'>Focused intelligence panel</div>", unsafe_allow_html=True)
-
-    center_options = filtered["data_center_name"].tolist()
-    chosen_center = st.selectbox("Select Hotspot", center_options, index=0, key="detail_center")
-    selected_row = filtered[filtered["data_center_name"] == chosen_center].iloc[0]
-    history = df[df["data_center_name"] == chosen_center].copy()
-
-    st.markdown(
-        f"""
-        <div style="font-size:18px; font-weight:850; color:#0F172A; margin-top:8px;">{chosen_center.replace('_',' ')}</div>
-        <div style="font-size:12px; color:#64748B; font-weight:700; margin-bottom:12px;">Lat {selected_row['latitude']:.3f}, Lon {selected_row['longitude']:.3f}</div>
-        """,
-        unsafe_allow_html=True,
+    st.markdown("<div class='card section-card'>", unsafe_allow_html=True)
+    st.markdown("<div class='breadcrumb'>← Overview  ›  Hotspot Detail</div>", unsafe_allow_html=True)
+    dsel = st.selectbox(
+        "Select Hotspot",
+        options=filtered["data_center_name"].tolist(),
+        index=filtered["data_center_name"].tolist().index(st.session_state.selected_center),
+        format_func=display_name,
+        key="hotspot_selectbox",
     )
+    st.session_state.selected_center = dsel
+    selected = filtered[filtered["data_center_name"].eq(dsel)].iloc[0]
+    center_df = df[df["data_center_name"].eq(dsel)].sort_values("Date")
 
-    d1, d2 = st.columns(2, gap="small")
-    with d1:
-        st.markdown(
-            f"""
-            <div class="score-box">
-              <div class="score-label">ECI Score</div>
-              <div class="score-value">{selected_row['ECI_score']:.2f}</div>
-              <span class="badge {risk_badge_class(selected_row['risk_level'])}">{selected_row['risk_level']}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with d2:
-        st.markdown(
-            f"""
-            <div class="score-box">
-              <div class="score-label">ESS Score</div>
-              <div class="score-value">{selected_row['ESS_score']:.2f}</div>
-              <span class="badge {risk_badge_class(selected_row['risk_level'])}">{selected_row['risk_level']}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("<div class='section-title'>LST Trend</div><div class='section-subtitle'>Land Surface Temperature</div>", unsafe_allow_html=True)
-    st.plotly_chart(line_chart(history, "mean_LST_C", "LST"), use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown("<div class='section-title'>NDWI Trend</div><div class='section-subtitle'>Water Availability</div>", unsafe_allow_html=True)
-    st.plotly_chart(line_chart(history, "mean_NDWI", "NDWI"), use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-    cur = float(selected_row["risk_score"])
-    f6 = float(selected_row["forecast_risk_score_6m"])
-    f12 = float(selected_row["forecast_risk_score_12m"])
-    direction = "rising" if f12 > cur else "stable or decreasing"
-
-    st.markdown("<div class='section-title'>AI Alert Summary</div>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="alert-box">
-        <b>{chosen_center.replace('_',' ')}</b> shows a current risk score of <b>{cur:.2f}</b>.
-        The 6-month forecast is <b>{f6:.2f}</b> and the 12-month forecast is <b>{f12:.2f}</b>, indicating a <b>{direction}</b> risk pattern.
-        Recommended action: monitor cooling demand, water availability, and local environmental change indicators.
+    ctop1, ctop2, ctop3, ctop4 = st.columns([1.1,1,1,.95], gap="small")
+    with ctop1:
+        st.markdown(f"""
+        <div class='card score-card'>
+            <div style='font-size:14px;font-weight:900;color:#0F172A'>{display_name(dsel)}</div>
+            <div style='font-size:11px;color:#64748B;font-weight:700;margin-top:10px;'>Data Center</div>
+            <div style='font-size:11px;color:#64748B;font-weight:700;'>Lat {selected['latitude']:.3f}, Lon {selected['longitude']:.3f}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(
-        f"""
-        <div class="score-box">
-          <div class="score-label">Overall Risk Level</div>
-          <div class="score-value" style="color:{risk_color(selected_row['risk_level'])};">{selected_row['risk_level']}</div>
-          <div style="height:8px; background:#E5EAF2; border-radius:999px; overflow:hidden; margin-top:12px;">
-             <div style="width:{min(max(cur,0),100)}%; height:100%; background:{score_color(cur)};"></div>
-          </div>
+        """, unsafe_allow_html=True)
+    with ctop2:
+        lvl = level_from_score(selected["ECI_score"])
+        st.markdown(f"""
+        <div class='card score-card'>
+            <div class='score-label'>ECI Score</div>
+            <div class='score-value'>{selected['ECI_score']:.2f}<span class='badge {badge_class(lvl)}'>{lvl}</span></div>
+            <div class='section-sub'>High rate of change</div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """, unsafe_allow_html=True)
+    with ctop3:
+        lvl2 = level_from_score(selected["ESS_score"])
+        st.markdown(f"""
+        <div class='card score-card'>
+            <div class='score-label'>ESS Score</div>
+            <div class='score-value'>{selected['ESS_score']:.2f}<span class='badge {badge_class(lvl2)}'>{lvl2}</span></div>
+            <div class='section-sub'>High environmental stress</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with ctop4:
+        st.markdown(f"""
+        <div class='card score-card'>
+            <div class='score-label'>Key Drivers</div>
+            <div style='font-size:11px;line-height:1.85;font-weight:800;color:#0F172A;margin-top:8px;'>
+                🌡 High Surface Temperature<br>🌿 Vegetation Health<br>💧 Water Availability
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    chart1, chart2 = st.columns(2, gap="medium")
+    with chart1:
+        st.markdown("""
+        <div class='card section-card' style='border-bottom-left-radius:0;border-bottom-right-radius:0;'>
+            <div class='section-title'>Land Surface Temperature</div>
+            <div class='section-sub'>Monthly LST trend</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(line_chart(center_df, "mean_LST_C", "#E11D48", "°C"), use_container_width=True, config={"displayModeBar": False})
+    with chart2:
+        st.markdown("""
+        <div class='card section-card' style='border-bottom-left-radius:0;border-bottom-right-radius:0;'>
+            <div class='section-title'>Water Availability</div>
+            <div class='section-sub'>Normalized Difference Water Index</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(line_chart(center_df, "mean_NDWI", "#2563EB", "Index"), use_container_width=True, config={"displayModeBar": False})
+
+    cur_level = level_from_score(selected["risk_score"])
+    st.markdown(f"""
+    <div class='alert-box'>
+        <div class='alert-icon'>⚠</div>
+        <div style='flex:1'>
+            <div class='alert-title'>AI Alert Summary</div>
+            <div class='alert-text'>{display_name(dsel)} shows current environmental stress with rising heat pressure and reduced water availability compared with historical baseline. Continuous monitoring and proactive mitigation are recommended.</div>
+        </div>
+        <div style='width:150px'>
+            <div style='font-size:11px;font-weight:900;color:#64748B;margin-bottom:7px;text-align:center;'>Overall Risk Level</div>
+            <div class='big-risk' style='background:{risk_color(cur_level)}'>{cur_level.upper()}</div>
+            <div style='font-size:10px;text-align:center;color:#64748B;font-weight:800;margin-top:6px;'>Priority Action Required</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    low1, low2 = st.columns(2, gap="medium")
+    with low1:
+        st.markdown(f"""
+        <div class='card mini-card'>
+            <div class='mini-title'>Community Alert</div>
+            <div class='mini-text'><b>Alert Level:</b> {cur_level}<br><b>Issue Detected:</b> Heat stress and water stress near {display_name(dsel)}.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class='card mini-card'>
+            <div class='mini-title'>Community Resources</div>
+            <div class='mini-text'>🔗 Local Water Authority<br>🔗 Heat Safety Tips<br>🔗 Report an Issue</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with low2:
+        st.markdown("""
+        <div class='card mini-card'>
+            <div class='mini-title'>Recommended Actions</div>
+            <div class='mini-text'>✅ Monitor local water storage and usage<br>✅ Avoid peak-hour outdoor activity<br>✅ Save water and use efficiently<br>✅ Follow official announcements</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='card mini-card'>
+            <div class='mini-title'>AI Forecast</div>
+            <div class='mini-text'><b>6 Months:</b> {selected['forecast_risk_score_6m']:.2f} / {selected['forecast_risk_level_6m']}<br><b>12 Months:</b> {selected['forecast_risk_score_12m']:.2f} / {selected['forecast_risk_level_12m']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------- Page behavior note for other nav buttons ----------
+if st.session_state.selected_page != "Overview":
+    st.toast(f"{st.session_state.selected_page} filter/page selected", icon="✅")
