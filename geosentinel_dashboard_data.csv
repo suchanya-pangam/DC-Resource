@@ -1,0 +1,11 @@
+data_center,lat,lon,mean_LST_C,mean_NDWI,mean_soil_moisture,lst_change,ndwi_change,soil_moisture_change,ECI,ESS,risk_level
+Meta_Mesa_AZ,33.324,-111.602,53.3,-0.2221,0.062,0.63,0.0384,-0.0019,43.66,56.34,Warning (Yellow)
+Apple_Reno_NV,39.556,-119.467,42.38,-0.1803,0.0905,3.01,-0.0266,0.0094,90.88,9.12,Critical (Red)
+Meta_EagleMountain_UT,40.26,-112.046,39.7,-0.2188,0.1395,2.04,-0.0147,0.0939,67.25,32.75,Warning (Yellow)
+Google_CouncilBluffs_IA,41.221,-95.862,25.4,-0.2672,0.3142,-1.96,0.0096,0.0012,50.85,49.15,Warning (Yellow)
+Meta_NewAlbany_OH,40.091,-82.766,19.81,-0.4255,0.3587,-4.57,0.0222,-0.0181,35.98,64.02,Safe (Green)
+Google_TheDalles_OR,45.604,-121.144,32.06,-0.2443,0.248,-0.3,-0.027,0.0067,78.79,21.21,Critical (Red)
+Meta_Prineville_OR,44.301,-120.814,31.09,-0.321,0.2714,3.4,-0.0173,0.0575,79.5,20.5,Critical (Red)
+Google_Lenoir_NC,35.897,-81.547,26.85,-0.4502,0.437,-7.0,0.0036,-0.0142,37.43,62.57,Safe (Green)
+AWS_Ashburn_VA,39.018,-77.472,25.39,-0.329,0.4229,-0.3,0.0054,-0.04,65.95,34.05,Warning (Yellow)
+Microsoft_SanAntonio_TX,29.435,-98.694,38.12,-0.2922,0.3482,0.17,0.0199,-0.0056,53.75,46.25,Warning (Yellow)
