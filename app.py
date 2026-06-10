@@ -4,26 +4,28 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 
-# -----------------------------
-# Page setup
-# -----------------------------
+# =========================================================
+# DC-Resource Dashboard
+# All dashboard values are calculated from geosentinel_dashboard_data.csv only.
+# =========================================================
+
 st.set_page_config(
-    page_title="GeoSentinel AI",
-    page_icon="🌍",
+    page_title="DC-Resource",
+    page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # -----------------------------
-# Dark premium CSS
+# Premium dark visual style
 # -----------------------------
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&display=swap');
 
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
+    html, body, [class*="css"], .stApp, .stMarkdown, .stText, .stCaption, div, span, p, h1, h2, h3, h4, h5, h6 {
+        font-family: 'Gelasio', serif !important;
     }
 
     .stApp {
@@ -36,20 +38,39 @@ st.markdown(
         border-right: 1px solid rgba(255,255,255,.12);
     }
 
-    section[data-testid="stSidebar"] * {
-        color: #edf6ff;
+    section[data-testid="stSidebar"] * { color: #edf6ff; }
+
+    .brand-block {
+        padding: 18px 14px;
+        border-radius: 22px;
+        background: linear-gradient(160deg, rgba(32,224,255,.14), rgba(138,92,255,.12));
+        border: 1px solid rgba(255,255,255,.12);
+        margin-bottom: 22px;
+    }
+
+    .brand-title {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        margin-bottom: 2px;
+    }
+
+    .brand-subtitle {
+        color: #b8c9dc;
+        font-size: 12px;
+        line-height: 1.5;
     }
 
     .main-title {
-        font-size: 34px;
-        font-weight: 900;
+        font-size: 38px;
+        font-weight: 700;
         letter-spacing: -0.04em;
         margin-bottom: 4px;
     }
 
     .subtitle {
         color: #8fa8c4;
-        font-size: 14px;
+        font-size: 15px;
         margin-bottom: 18px;
     }
 
@@ -61,7 +82,7 @@ st.markdown(
         background: rgba(32,224,255,.08);
         color: #bff7ff;
         font-size: 12px;
-        font-weight: 900;
+        font-weight: 700;
         margin-bottom: 12px;
     }
 
@@ -86,12 +107,12 @@ st.markdown(
     .kpi-label {
         color: #8fa8c4;
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 700;
     }
 
     .kpi-value {
         font-size: 34px;
-        font-weight: 900;
+        font-weight: 700;
         line-height: 1.1;
         margin-top: 8px;
     }
@@ -109,14 +130,14 @@ st.markdown(
     .orange { color: #ff8a3c; }
 
     .section-title {
-        font-size: 18px;
-        font-weight: 900;
+        font-size: 20px;
+        font-weight: 700;
         margin-bottom: 4px;
     }
 
     .section-subtitle {
         color: #8fa8c4;
-        font-size: 12px;
+        font-size: 13px;
         margin-bottom: 16px;
     }
 
@@ -157,12 +178,12 @@ st.markdown(
 
     div[data-testid="stMetric"] label {
         color: #8fa8c4 !important;
-        font-weight: 800;
+        font-weight: 700;
     }
 
     div[data-testid="stMetricValue"] {
         color: #edf6ff !important;
-        font-weight: 900;
+        font-weight: 700;
     }
 
     .stDataFrame {
@@ -175,26 +196,41 @@ st.markdown(
 )
 
 # -----------------------------
-# Load data from CSV only
+# Load source data
 # -----------------------------
 DATA_PATH = Path("geosentinel_dashboard_data.csv")
+
+REQUIRED_COLUMNS = [
+    "data_center", "lat", "lon", "mean_LST_C", "mean_NDWI",
+    "mean_soil_moisture", "lst_change", "ndwi_change",
+    "soil_moisture_change", "ECI", "ESS", "risk_level"
+]
+
+DISPLAY_NAMES = {
+    "data_center": "Data Center Site",
+    "lat": "Latitude",
+    "lon": "Longitude",
+    "mean_LST_C": "Land Surface Temperature (°C)",
+    "mean_NDWI": "Surface Water Availability Index",
+    "mean_soil_moisture": "Soil Water Content",
+    "lst_change": "Temperature Change",
+    "ndwi_change": "Water Availability Change",
+    "soil_moisture_change": "Soil Moisture Change",
+    "ECI": "Environmental Change Index",
+    "ESS": "Environmental Stress Score",
+    "risk_level": "Environmental Risk Classification",
+}
 
 @st.cache_data
 def load_data(path: Path) -> pd.DataFrame:
     if not path.exists():
-        st.error("ไม่พบไฟล์ geosentinel_dashboard_data.csv กรุณาวางไฟล์ CSV ไว้ในโฟลเดอร์เดียวกับ app.py")
+        st.error("Source dataset not found. Please place geosentinel_dashboard_data.csv in the same folder as this app file.")
         st.stop()
 
     data = pd.read_csv(path)
-
-    required_columns = [
-        "data_center", "lat", "lon", "mean_LST_C", "mean_NDWI",
-        "mean_soil_moisture", "lst_change", "ndwi_change",
-        "soil_moisture_change", "ECI", "ESS", "risk_level"
-    ]
-    missing = [col for col in required_columns if col not in data.columns]
+    missing = [col for col in REQUIRED_COLUMNS if col not in data.columns]
     if missing:
-        st.error(f"CSV ขาดคอลัมน์: {', '.join(missing)}")
+        st.error("The source dataset is missing required fields for the dashboard analysis.")
         st.stop()
 
     return data
@@ -203,80 +239,96 @@ def load_data(path: Path) -> pd.DataFrame:
 df = load_data(DATA_PATH)
 
 # -----------------------------
-# Helpers based only on CSV values
+# Helper functions
 # -----------------------------
+def risk_class(level: str) -> str:
+    text = str(level).strip()
+    if "(" in text:
+        text = text.split("(")[0].strip()
+    return text
+
+
 def risk_color(level: str) -> str:
-    level = str(level).lower()
-    if "critical" in level or "red" in level:
+    text = str(level).lower()
+    if "critical" in text:
         return "#ff425b"
-    if "warning" in level or "yellow" in level:
+    if "warning" in text:
         return "#ffd24a"
-    if "safe" in level or "green" in level:
+    if "safe" in text:
         return "#42d67b"
     return "#20e0ff"
 
 
-def risk_short(level: str) -> str:
-    text = str(level)
-    if "(" in text:
-        return text.split("(")[0].strip()
-    return text
+def evidence_summary(row: pd.Series) -> list[str]:
+    evidence = []
 
-
-def driver_summary(row: pd.Series) -> list[str]:
-    drivers = []
     if row["lst_change"] > 0:
-        drivers.append(f"LST เพิ่มขึ้น {row['lst_change']:.2f} °C")
+        evidence.append(f"Land surface temperature increased by {row['lst_change']:.2f} °C")
     elif row["lst_change"] < 0:
-        drivers.append(f"LST ลดลง {abs(row['lst_change']):.2f} °C")
+        evidence.append(f"Land surface temperature decreased by {abs(row['lst_change']):.2f} °C")
 
     if row["ndwi_change"] < 0:
-        drivers.append(f"NDWI ลดลง {abs(row['ndwi_change']):.4f}")
+        evidence.append(f"Surface water availability decreased by {abs(row['ndwi_change']):.4f}")
     elif row["ndwi_change"] > 0:
-        drivers.append(f"NDWI เพิ่มขึ้น {row['ndwi_change']:.4f}")
+        evidence.append(f"Surface water availability increased by {row['ndwi_change']:.4f}")
 
     if row["soil_moisture_change"] < 0:
-        drivers.append(f"Soil Moisture ลดลง {abs(row['soil_moisture_change']):.4f}")
+        evidence.append(f"Soil water content decreased by {abs(row['soil_moisture_change']):.4f}")
     elif row["soil_moisture_change"] > 0:
-        drivers.append(f"Soil Moisture เพิ่มขึ้น {row['soil_moisture_change']:.4f}")
+        evidence.append(f"Soil water content increased by {row['soil_moisture_change']:.4f}")
 
-    return drivers
+    return evidence
 
+
+def display_table(data: pd.DataFrame) -> pd.DataFrame:
+    return data.rename(columns=DISPLAY_NAMES)
 
 # -----------------------------
 # Sidebar
 # -----------------------------
 with st.sidebar:
-    st.markdown("# ⌁ GeoSentinel AI")
-    st.caption("Satellite-Powered Environmental Early Warning")
+    st.markdown(
+        """
+        <div class="brand-block">
+            <div class="brand-title">DC-Resource</div>
+            <div class="brand-subtitle">GeoAI-Based Environmental Intelligence for Sustainable Data Center Development</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     page = st.radio(
         "Navigation",
-        ["▣ Innovation Overview", "⌖ Hotspot Detail", "↗ Evidence Trends", "▤ Raw Data"],
+        [
+            "Overview",
+            "Site Assessment",
+            "Environmental Dynamics",
+            "Source Dataset",
+        ],
         label_visibility="collapsed",
     )
     st.markdown("---")
-    st.markdown("**Data source**")
-    st.caption("ใช้ข้อมูลจาก `geosentinel_dashboard_data.csv` เท่านั้น")
-    st.markdown("**Records**")
-    st.caption(f"{len(df)} data centers")
+    st.markdown("**Dataset Status**")
+    st.caption("Dashboard values are calculated from the uploaded CSV dataset only.")
+    st.markdown("**Monitored Sites**")
+    st.caption(f"{len(df)} data center sites")
 
 # -----------------------------
-# Header
+# Global header
 # -----------------------------
-st.markdown('<div class="badge">LIVE DEMO · Hackathon Prototype</div>', unsafe_allow_html=True)
-st.markdown('<div class="main-title">GeoSentinel AI Innovation Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="badge">LIVE DEMO · GeoAI Hackathon Prototype</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">DC-Resource Intelligence Platform</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="subtitle">Satellite-derived environmental monitoring for data centers · values calculated from CSV only</div>',
+    '<div class="subtitle">A GeoAI framework for monitoring environmental resource impacts of large-scale data centers</div>',
     unsafe_allow_html=True,
 )
 
 # -----------------------------
-# Overview Page
+# Overview
 # -----------------------------
-if page == "▣ Innovation Overview":
+if page == "Overview":
     critical_count = int(df["risk_level"].astype(str).str.contains("Critical", case=False, na=False).sum())
     warning_count = int(df["risk_level"].astype(str).str.contains("Warning", case=False, na=False).sum())
-    safe_count = int(df["risk_level"].astype(str).str.contains("Safe", case=False, na=False).sum())
+    stable_count = int(df["risk_level"].astype(str).str.contains("Safe", case=False, na=False).sum())
 
     top_eci = df.loc[df["ECI"].idxmax()]
     top_ess = df.loc[df["ESS"].idxmax()]
@@ -285,23 +337,23 @@ if page == "▣ Innovation Overview":
     with k1:
         st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-label">Monitored Data Centers</div>
+            <div class="kpi-label">Monitored Data Center Sites</div>
             <div class="kpi-value cyan">{len(df)}</div>
-            <div class="kpi-note">CSV records</div>
+            <div class="kpi-note">Sites available in the source dataset</div>
         </div>
         """, unsafe_allow_html=True)
     with k2:
         st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-label">Critical Hotspots</div>
+            <div class="kpi-label">Critical Environmental Sites</div>
             <div class="kpi-value red">{critical_count}</div>
-            <div class="kpi-note">from risk_level column</div>
+            <div class="kpi-note">Sites classified as critical risk</div>
         </div>
         """, unsafe_allow_html=True)
     with k3:
         st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-label">Highest ECI</div>
+            <div class="kpi-label">Maximum Environmental Change</div>
             <div class="kpi-value yellow">{top_eci['ECI']:.2f}</div>
             <div class="kpi-note">{top_eci['data_center']}</div>
         </div>
@@ -309,47 +361,50 @@ if page == "▣ Innovation Overview":
     with k4:
         st.markdown(f"""
         <div class="kpi-card">
-            <div class="kpi-label">Highest ESS</div>
+            <div class="kpi-label">Maximum Environmental Stress</div>
             <div class="kpi-value green">{top_ess['ESS']:.2f}</div>
             <div class="kpi-note">{top_ess['data_center']}</div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
     left, right = st.columns([1.35, 0.65])
 
     with left:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">1. Monitor + Detect: Environmental Hotspot Map</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">National Environmental Risk Distribution</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-subtitle">ตำแหน่ง Data Center และสีความเสี่ยงมาจาก lat, lon และ risk_level ใน CSV</div>',
+            '<div class="section-subtitle">Spatial distribution of environmental stress and resource vulnerability surrounding monitored data center sites.</div>',
             unsafe_allow_html=True,
         )
 
         map_df = df.copy()
-        map_df["risk_display"] = map_df["risk_level"].apply(risk_short)
-        map_df["color"] = map_df["risk_level"].apply(risk_color)
+        map_df["Risk Classification"] = map_df["risk_level"].apply(risk_class)
+        map_df["Land Surface Temperature (°C)"] = map_df["mean_LST_C"]
+        map_df["Surface Water Availability Index"] = map_df["mean_NDWI"]
+        map_df["Soil Water Content"] = map_df["mean_soil_moisture"]
+        map_df["Environmental Change Index"] = map_df["ECI"]
+        map_df["Environmental Stress Score"] = map_df["ESS"]
 
         fig_map = px.scatter_mapbox(
             map_df,
             lat="lat",
             lon="lon",
-            color="risk_display",
-            size="ECI",
+            color="Risk Classification",
+            size="Environmental Change Index",
             size_max=22,
             zoom=3,
             height=520,
             hover_name="data_center",
             hover_data={
-                "lat": ":.3f",
-                "lon": ":.3f",
-                "mean_LST_C": ":.2f",
-                "mean_NDWI": ":.4f",
-                "mean_soil_moisture": ":.4f",
-                "ECI": ":.2f",
-                "ESS": ":.2f",
-                "risk_display": False,
+                "lat": False,
+                "lon": False,
+                "Land Surface Temperature (°C)": ":.2f",
+                "Surface Water Availability Index": ":.4f",
+                "Soil Water Content": ":.4f",
+                "Environmental Change Index": ":.2f",
+                "Environmental Stress Score": ":.2f",
+                "Risk Classification": False,
             },
             color_discrete_map={
                 "Critical": "#ff425b",
@@ -361,41 +416,42 @@ if page == "▣ Innovation Overview":
             mapbox_style="carto-darkmatter",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#edf6ff"),
+            font=dict(color="#edf6ff", family="Gelasio"),
             margin=dict(l=0, r=0, t=0, b=0),
-            legend_title_text="Risk Level",
+            legend_title_text="Risk Classification",
         )
         st.plotly_chart(fig_map, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Top Risk Ranking</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">เรียงตาม ECI จากข้อมูลจริงใน CSV</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Priority Environmental Risk Assessment</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Ranked by environmental change intensity from the source dataset.</div>', unsafe_allow_html=True)
         rank_df = df.sort_values("ECI", ascending=False)[["data_center", "ECI", "ESS", "risk_level"]].copy()
-        rank_df.insert(0, "rank", range(1, len(rank_df) + 1))
-        st.dataframe(rank_df, use_container_width=True, hide_index=True)
+        rank_df.insert(0, "Priority", range(1, len(rank_df) + 1))
+        rank_df["risk_level"] = rank_df["risk_level"].apply(risk_class)
+        st.dataframe(display_table(rank_df), use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Risk Level Summary</div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-subtitle">นับจำนวนจาก risk_level column</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Risk Classification Overview</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Summary of environmental risk classes across all monitored sites.</div>', unsafe_allow_html=True)
         summary = pd.DataFrame({
-            "Risk Level": ["Critical", "Warning", "Safe"],
-            "Count": [critical_count, warning_count, safe_count],
+            "Risk Classification": ["Critical", "Warning", "Safe"],
+            "Number of Sites": [critical_count, warning_count, stable_count],
         })
         fig_bar = px.bar(
             summary,
-            x="Risk Level",
-            y="Count",
-            color="Risk Level",
+            x="Risk Classification",
+            y="Number of Sites",
+            color="Risk Classification",
             color_discrete_map={"Critical": "#ff425b", "Warning": "#ffd24a", "Safe": "#42d67b"},
             height=260,
         )
         fig_bar.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#edf6ff"),
+            font=dict(color="#edf6ff", family="Gelasio"),
             margin=dict(l=0, r=0, t=10, b=0),
             showlegend=False,
         )
@@ -403,119 +459,152 @@ if page == "▣ Innovation Overview":
         st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
-# Hotspot Detail Page
+# Site assessment
 # -----------------------------
-elif page == "⌖ Hotspot Detail":
-    selected_dc = st.selectbox("Select Data Center", df["data_center"].tolist())
-    row = df[df["data_center"] == selected_dc].iloc[0]
+elif page == "Site Assessment":
+    selected_site = st.selectbox("Select Data Center Site", df["data_center"].tolist())
+    row = df[df["data_center"] == selected_site].iloc[0]
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown(f'<div class="section-title">Selected Hotspot: {selected_dc}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">ค่าทั้งหมดอ่านจากแถวของ Data Center ที่เลือกใน CSV</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="section-title">Site-Level Environmental Assessment: {selected_site}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Environmental status and site-level metrics derived from the selected record in the source dataset.</div>', unsafe_allow_html=True)
 
     a, b, c, d = st.columns(4)
-    a.metric("Risk Level", row["risk_level"])
-    b.metric("ECI", f"{row['ECI']:.2f}")
-    c.metric("ESS", f"{row['ESS']:.2f}")
-    d.metric("LST", f"{row['mean_LST_C']:.2f} °C")
+    a.metric("Risk Classification", risk_class(row["risk_level"]))
+    b.metric("Environmental Change Index", f"{row['ECI']:.2f}")
+    c.metric("Environmental Stress Score", f"{row['ESS']:.2f}")
+    d.metric("Land Surface Temperature", f"{row['mean_LST_C']:.2f} °C")
 
     e, f, g = st.columns(3)
-    e.metric("NDWI", f"{row['mean_NDWI']:.4f}")
-    f.metric("Soil Moisture", f"{row['mean_soil_moisture']:.4f}")
-    g.metric("Location", f"{row['lat']:.3f}, {row['lon']:.3f}")
+    e.metric("Surface Water Availability", f"{row['mean_NDWI']:.4f}")
+    f.metric("Soil Water Content", f"{row['mean_soil_moisture']:.4f}")
+    g.metric("Site Coordinates", f"{row['lat']:.3f}, {row['lon']:.3f}")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    col1, col2 = st.columns([0.55, 0.45])
+    col1, col2 = st.columns([0.58, 0.42])
     with col1:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Environmental Indicators</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Environmental Performance Metrics</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-subtitle">Indicator values from the selected site record.</div>', unsafe_allow_html=True)
         indicator_df = pd.DataFrame({
-            "Indicator": ["mean_LST_C", "mean_NDWI", "mean_soil_moisture", "lst_change", "ndwi_change", "soil_moisture_change", "ECI", "ESS"],
-            "Value": [row["mean_LST_C"], row["mean_NDWI"], row["mean_soil_moisture"], row["lst_change"], row["ndwi_change"], row["soil_moisture_change"], row["ECI"], row["ESS"]],
+            "Environmental Metric": [
+                "Land Surface Temperature",
+                "Surface Water Availability",
+                "Soil Water Content",
+                "Temperature Change",
+                "Water Availability Change",
+                "Soil Moisture Change",
+                "Environmental Change Index",
+                "Environmental Stress Score",
+            ],
+            "Value": [
+                row["mean_LST_C"],
+                row["mean_NDWI"],
+                row["mean_soil_moisture"],
+                row["lst_change"],
+                row["ndwi_change"],
+                row["soil_moisture_change"],
+                row["ECI"],
+                row["ESS"],
+            ],
         })
-        fig = px.bar(indicator_df, x="Indicator", y="Value", color="Indicator", height=430)
-        fig.update_layout(
+        fig_metric = px.bar(indicator_df, x="Environmental Metric", y="Value", color="Environmental Metric", height=430)
+        fig_metric.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#edf6ff"),
+            font=dict(color="#edf6ff", family="Gelasio"),
             margin=dict(l=0, r=0, t=10, b=0),
             showlegend=False,
+            xaxis_tickangle=-30,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_metric, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">AI Insight Summary</div>', unsafe_allow_html=True)
-        drivers = driver_summary(row)
-        driver_text = "<br>".join([f"• {d}" for d in drivers]) if drivers else "ไม่มีค่า change ที่เด่นจาก CSV"
+        st.markdown('<div class="section-title">GeoAI Evidence Summary</div>', unsafe_allow_html=True)
+        evidence = evidence_summary(row)
+        evidence_text = "<br>".join([f"• {item}" for item in evidence]) if evidence else "No major directional change is available from the source record."
         st.markdown(
             f"""
             <div class="insight-box">
-                <div class="bot-icon">🤖</div>
+                <div class="bot-icon">⌁</div>
                 <div>
-                    <b>{selected_dc}</b><br>
+                    <b>{selected_site}</b><br>
                     <div class="mini-text">
-                    Risk level จาก CSV: <b>{row['risk_level']}</b><br><br>
-                    Evidence from CSV:<br>{driver_text}
+                    Environmental risk classification: <b>{risk_class(row['risk_level'])}</b><br><br>
+                    Evidence from source data:<br>{evidence_text}
                     </div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.info("หมายเหตุ: ส่วนนี้เป็น rule-based explanation จากคอลัมน์ change ใน CSV ไม่ได้เมคตัวเลขใหม่")
+        st.caption("This explanation is rule-based and uses only directional changes available in the source dataset.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
-# Evidence Trends Page
+# Environmental dynamics
 # -----------------------------
-elif page == "↗ Evidence Trends":
+elif page == "Environmental Dynamics":
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">2. Evidence Trends from CSV</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">ใช้ lst_change, ndwi_change และ soil_moisture_change แทน Forecast ที่ยังไม่มีข้อมูลจริง</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Environmental Change Dynamics</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Comparison of temperature, water availability, and soil moisture changes across monitored data center sites.</div>', unsafe_allow_html=True)
 
-    trend_df = df[["data_center", "lst_change", "ndwi_change", "soil_moisture_change", "risk_level"]].copy()
-    fig = go.Figure()
-    fig.add_trace(go.Bar(name="LST Change", x=trend_df["data_center"], y=trend_df["lst_change"], marker_color="#ff425b"))
-    fig.add_trace(go.Bar(name="NDWI Change", x=trend_df["data_center"], y=trend_df["ndwi_change"], marker_color="#20e0ff"))
-    fig.add_trace(go.Bar(name="Soil Moisture Change", x=trend_df["data_center"], y=trend_df["soil_moisture_change"], marker_color="#42d67b"))
-    fig.update_layout(
+    trend_df = df[["data_center", "lst_change", "ndwi_change", "soil_moisture_change"]].rename(columns={
+        "data_center": "Data Center Site",
+        "lst_change": "Temperature Change",
+        "ndwi_change": "Water Availability Change",
+        "soil_moisture_change": "Soil Moisture Change",
+    })
+
+    fig_trend = go.Figure()
+    fig_trend.add_trace(go.Bar(name="Temperature Change", x=trend_df["Data Center Site"], y=trend_df["Temperature Change"], marker_color="#ff425b"))
+    fig_trend.add_trace(go.Bar(name="Water Availability Change", x=trend_df["Data Center Site"], y=trend_df["Water Availability Change"], marker_color="#20e0ff"))
+    fig_trend.add_trace(go.Bar(name="Soil Moisture Change", x=trend_df["Data Center Site"], y=trend_df["Soil Moisture Change"], marker_color="#42d67b"))
+    fig_trend.update_layout(
         barmode="group",
         height=520,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#edf6ff"),
+        font=dict(color="#edf6ff", family="Gelasio"),
         margin=dict(l=0, r=0, t=20, b=0),
         xaxis_tickangle=-35,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig_trend, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">3. Recommendation Evidence</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-subtitle">แสดงข้อสรุปตามหลักฐานจาก CSV เท่านั้น ยังไม่ใส่ expected impact ที่ไม่มีข้อมูลรองรับ</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="section-title">Strategic Resource Management Insights</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Priority observations based on the strongest environmental change values in the source dataset.</div>', unsafe_allow_html=True)
     for _, r in df.sort_values("ECI", ascending=False).head(5).iterrows():
-        drivers = "; ".join(driver_summary(r))
-        st.markdown(f"**{r['data_center']}** — Risk: `{r['risk_level']}` · ECI: `{r['ECI']:.2f}` · ESS: `{r['ESS']:.2f}`")
-        st.caption(drivers if drivers else "No change evidence available")
+        evidence = "; ".join(evidence_summary(r))
+        st.markdown(
+            f"**{r['data_center']}** — Risk Classification: `{risk_class(r['risk_level'])}` · "
+            f"Environmental Change Index: `{r['ECI']:.2f}` · Environmental Stress Score: `{r['ESS']:.2f}`"
+        )
+        st.caption(evidence if evidence else "No directional change evidence is available for this site.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
-# Raw Data Page
+# Source dataset
 # -----------------------------
 else:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Raw CSV Data</div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-subtitle">ข้อมูลต้นทางที่ Dashboard ใช้ทั้งหมด</div>', unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.markdown('<div class="section-title">Source Dataset</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-subtitle">Renamed field view of the dataset used by this dashboard.</div>', unsafe_allow_html=True)
+    source_view = df.copy()
+    source_view["risk_level"] = source_view["risk_level"].apply(risk_class)
+    st.dataframe(display_table(source_view), use_container_width=True, hide_index=True)
     st.download_button(
-        "Download CSV",
+        "Download Source Dataset",
         df.to_csv(index=False).encode("utf-8"),
         file_name="geosentinel_dashboard_data.csv",
         mime="text/csv",
     )
     st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown(
+    '<div style="text-align:center;color:#9fb4ca;font-size:12px;margin-top:12px;">DC-Resource · All dashboard values are calculated from the CSV dataset only.</div>',
+    unsafe_allow_html=True,
+)
