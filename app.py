@@ -158,6 +158,56 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
 .email-btn { background: var(--blue); color: white; border: 0; border-radius: 4px; padding: 0 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
 
 .footer-bar { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 10px; color: var(--muted); display: flex; justify-content: space-between; }
+
+/* ===== Multipage Overlay: pages appear in the same main area, not below ===== */
+.page-layer {
+  grid-column: 2 / 4;
+  grid-row: 1;
+  display: none;
+  height: 1080px;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 24px;
+}
+.page-layer.active { display: block; }
+.main.hidden, .right-panel.hidden { display: none !important; }
+
+.page { display: none; max-width: 1380px; margin: 0 auto; }
+.page.active { display: block; }
+.page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+.page-title h1 { font-size: 28px; font-weight: 800; margin: 0 0 8px 0; letter-spacing: -0.02em; }
+.page-title p { font-size: 14px; margin: 0; color: var(--muted); }
+.btn-primary { background: var(--blue); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.hotspot-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+.satellite-view {
+  height: 400px;
+  background:
+    radial-gradient(circle at 70% 55%, rgba(230,49,69,0.45), transparent 18%),
+    radial-gradient(circle at 25% 35%, rgba(255,255,255,0.24), transparent 16%),
+    linear-gradient(135deg, #114B35, #8FBF9B 45%, #5E6A73);
+  border-radius: 12px;
+  position: relative;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.timeline-chart { height: 200px; background: repeating-linear-gradient(90deg, #F5F8FC, #F5F8FC 1px, transparent 1px, transparent 40px); border-bottom: 2px solid var(--line); margin-top: 20px; position: relative; }
+.timeline-line { position: absolute; bottom: 42px; left: 0; width: 100%; height: 70px; border-bottom: 3px solid var(--red); border-radius: 50%; }
+.alerts-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.alerts-table th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 2px solid var(--line); }
+.alerts-table td { padding: 16px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.alert-row:hover { background: #F9FAFB; cursor: pointer; }
+.badge.Resolved { background: #ECFDF3; color: #039855; }
+.badge.Pending { background: #FEF3C7; color: #B57F1E; }
+.dc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.dc-card-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
+.trends-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.bar-chart-mock { display: flex; align-items: flex-end; gap: 10px; height: 250px; padding-top: 20px; }
+.bar { flex: 1; border-radius: 4px 4px 0 0; min-height: 20px; transition: height 0.3s; }
+.report-form { max-width: 600px; display: grid; gap: 16px; }
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.input-group label { font-size: 13px; font-weight: 600; }
+.input-group select, .input-group input { padding: 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -166,22 +216,22 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
   <aside class="sidebar">
     <div class="brand">
       <div class="logo">🛰️</div>
-      <div class="brand-title">GeoSentinel AI</div>
+      <div class="brand-title">DC-Resource Intelligence Platform</div>
     </div>
     <div class="brand-sub">Environmental<br/>Early Warning System</div>
     <div class="nav">
-      <button class="nav-btn active">📊 Overview</button>
-      <button class="nav-btn">🎯 Hotspot Detail</button>
-      <button class="nav-btn">🔔 Alerts</button>
-      <button class="nav-btn">🏢 Data Centers</button>
-      <button class="nav-btn">📈 Trends</button>
-      <button class="nav-btn">📄 Reports</button>
-      <button class="nav-btn">ℹ️ About</button>
+      <button class="nav-btn active" onclick="switchPage('overview', this)">📊 Overview</button>
+      <button class="nav-btn" onclick="switchPage('hotspot', this)">🎯 Hotspot Detail</button>
+      <button class="nav-btn" onclick="switchPage('alerts', this)">🔔 Alerts</button>
+      <button class="nav-btn" onclick="switchPage('datacenters', this)">🏢 Data Centers</button>
+      <button class="nav-btn" onclick="switchPage('trends', this)">📈 Trends</button>
+      <button class="nav-btn" onclick="switchPage('reports', this)">📄 Reports</button>
+      <button class="nav-btn" onclick="switchPage('about', this)">ℹ️ About</button>
     </div>
     <div class="source-box">
       <b>Data Source</b><br/>
       Google Earth Engine<br/>
-      (2019 – 2026)
+      (2020 – 2026)
     </div>
   </aside>
 
@@ -299,10 +349,140 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
     </div>
 
     <div class="footer-bar">
-      <span>🛡️ GeoSentinel Platform v2.4</span>
+      <span>🛡️ DC-Resource Intelligence Platform v2.4</span>
       <span>System Update: 2026</span>
     </div>
   </section>
+
+  <main class="page-layer" id="pageLayer">
+    <section id="page-hotspot" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Hotspot Assessment</h1>
+          <p>Detailed microclimate and satellite analysis</p>
+        </div>
+        <button class="btn-primary">⬇️ Export Analysis</button>
+      </div>
+      <div class="hotspot-grid">
+        <div class="card">
+          <h3 style="margin-top:0;">Satellite Imagery (NDVI vs True Color)</h3>
+          <div class="satellite-view">
+             <div style="position:absolute; bottom:10px; left:10px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; font-size:12px; font-weight:bold;">
+               🔴 High Heat Signature Detected
+             </div>
+          </div>
+          <h3 style="margin-top:24px;">Timeline Analysis (5 Years)</h3>
+          <div class="timeline-chart"><div class="timeline-line"></div></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3 style="margin-top:0; color: var(--red);">Critical Metrics</h3>
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span>LST (Temperature)</span><strong>+4.2°C ↗</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>NDWI (Water Stress)</span><strong>-12.5% ↘</strong></div>
+          </div>
+          <div class="card" style="background: #FFF5F5; border-color: #FEE4E4;">
+            <h3 style="margin-top:0; color: var(--red);">AI Insight</h3>
+            <p style="font-size:13px; line-height:1.5;">Significant reduction in surrounding vegetation canopy detected over the last 18 months, correlating with a localized heat island effect. Cooling systems may experience increased operational load.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-alerts" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>System Alerts</h1>
+          <p>Actionable intelligence and automated warnings</p>
+        </div>
+      </div>
+      <div class="card">
+        <table class="alerts-table">
+          <thead><tr><th>Date</th><th>Facility</th><th>Risk Level</th><th>AI Summary</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr class="alert-row"><td>Oct 12, 2026</td><td><strong>Ashburn-VA-01</strong></td><td><span class="badge Critical">Critical</span></td><td>Rapid LST spike detected outside normal seasonal variance.</td><td><span class="badge Pending">Pending Review</span></td><td><span style="color:var(--blue); font-weight:600;">View ↗</span></td></tr>
+            <tr class="alert-row"><td>Oct 10, 2026</td><td><strong>Prineville-OR-02</strong></td><td><span class="badge Critical">Critical</span></td><td>Water stress index (NDWI) dropped below safety threshold.</td><td><span class="badge Pending">Pending Review</span></td><td><span style="color:var(--blue); font-weight:600;">View ↗</span></td></tr>
+            <tr class="alert-row"><td>Sep 28, 2026</td><td><strong>Mesa-AZ-04</strong></td><td><span class="badge Resolved">Stable</span></td><td>Vegetation recovery observed. Stress markers normalizing.</td><td><span class="badge Resolved">Acknowledged</span></td><td><span style="color:var(--muted);">Archived</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="page-datacenters" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Facility Directory</h1>
+          <p>Master index of all monitored data centers</p>
+        </div>
+        <input type="text" placeholder="🔍 Search facility..." style="padding:10px 16px; border:1px solid var(--line); border-radius:8px; width:250px;">
+      </div>
+      <div class="dc-grid">
+        <div class="card"><div class="dc-card-header"><strong>Ashburn-VA-01</strong><span class="badge Critical">ECI: 72</span></div><p style="font-size:12px; color:var(--muted); margin:0 0 16px 0;">Loudoun County, Virginia</p><button class="btn-primary" style="width:100%; background:var(--softBlue); color:var(--blue);" onclick="switchPage('hotspot', document.querySelectorAll('.nav-btn')[1])">Analyze Hub</button></div>
+        <div class="card"><div class="dc-card-header"><strong>Prineville-OR-02</strong><span class="badge Critical">ECI: 68</span></div><p style="font-size:12px; color:var(--muted); margin:0 0 16px 0;">Crook County, Oregon</p><button class="btn-primary" style="width:100%; background:var(--softBlue); color:var(--blue);" onclick="switchPage('hotspot', document.querySelectorAll('.nav-btn')[1])">Analyze Hub</button></div>
+        <div class="card"><div class="dc-card-header"><strong>CouncilBluffs-IA-01</strong><span class="badge Stable">ECI: 24</span></div><p style="font-size:12px; color:var(--muted); margin:0 0 16px 0;">Pottawattamie County, Iowa</p><button class="btn-primary" style="width:100%; background:var(--softBlue); color:var(--blue);" onclick="switchPage('hotspot', document.querySelectorAll('.nav-btn')[1])">Analyze Hub</button></div>
+      </div>
+    </section>
+
+    <section id="page-trends" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Macro Trends & Benchmarks</h1>
+          <p>Compare facility performance across the portfolio</p>
+        </div>
+      </div>
+      <div class="trends-grid">
+        <div class="card">
+          <h3>Top Heat Generators (LST Variance)</h3>
+          <div class="bar-chart-mock">
+            <div class="bar" style="height:100%; background:var(--red);"></div>
+            <div class="bar" style="height:80%; background:var(--orange);"></div>
+            <div class="bar" style="height:60%; background:var(--yellow);"></div>
+            <div class="bar" style="height:40%; background:var(--green);"></div>
+            <div class="bar" style="height:30%; background:var(--green);"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Water Stress Index Correlation</h3>
+          <div style="height:250px; display:flex; align-items:center; justify-content:center; border:1px dashed var(--line); border-radius:8px; color:var(--muted);">Scatter Plot Placeholder</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-reports" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>Generate Reports</h1>
+          <p>Export compliance and environmental assessment files</p>
+        </div>
+      </div>
+      <div class="card report-form">
+        <div class="input-group"><label>Select Facility</label><select><option>All Monitored Facilities</option><option>Ashburn-VA-01</option></select></div>
+        <div class="input-group"><label>Timeframe</label><select><option>Last 30 Days</option><option>Last 12 Months</option><option>5-Year Historical</option></select></div>
+        <div class="input-group"><label>Include Metrics</label><div style="display:flex; gap:16px; font-size:13px; flex-wrap:wrap;"><label><input type="checkbox" checked> ECI & ESS Scores</label><label><input type="checkbox" checked> AI Actionable Insights</label><label><input type="checkbox"> Raw Satellite Data Links</label></div></div>
+        <button class="btn-primary" style="margin-top:16px; width:200px;">Generate PDF Report</button>
+      </div>
+    </section>
+
+    <section id="page-about" class="page">
+      <div class="page-header">
+        <div class="page-title">
+          <h1>About DC-Resource Intelligence Platform</h1>
+          <p>GeoAI Project Information</p>
+        </div>
+      </div>
+      <div class="card" style="line-height:1.6; max-width:800px;">
+        <h3>How it works</h3>
+        <p>This platform uses satellite-derived environmental indicators to calculate the <strong>Environmental Change Index (ECI)</strong> for historical drift and the <strong>Environmental Stress Score (ESS)</strong> for active resource stress.</p>
+        <hr style="border:0; border-top:1px solid var(--line); margin:24px 0;">
+        <h3>Project Focus</h3>
+        <ul style="padding-left:20px;">
+          <li>Environmental monitoring for data center locations</li>
+          <li>Risk scoring from LST, NDWI, ECI, ESS, and related indicators</li>
+          <li>Dashboard-based early warning and decision support</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
 </div>
 
 <script>
@@ -560,6 +740,33 @@ function renderAll() {
   renderMaps(currentData);
   renderTables(currentData);
   renderHotspotSection(currentData);
+}
+
+
+// ===== Multipage Navigation: show pages in the center/right area, not under the dashboard =====
+function switchPage(pageId, btnElement) {
+  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+  if (btnElement) btnElement.classList.add('active');
+
+  const main = document.querySelector('.main');
+  const rightPanel = document.querySelector('.right-panel');
+  const pageLayer = document.getElementById('pageLayer');
+
+  document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+
+  if (pageId === 'overview') {
+    if (main) main.classList.remove('hidden');
+    if (rightPanel) rightPanel.classList.remove('hidden');
+    if (pageLayer) pageLayer.classList.remove('active');
+    return;
+  }
+
+  if (main) main.classList.add('hidden');
+  if (rightPanel) rightPanel.classList.add('hidden');
+  if (pageLayer) pageLayer.classList.add('active');
+
+  const target = document.getElementById('page-' + pageId);
+  if (target) target.classList.add('active');
 }
 
 // เริ่มต้นเรียกใช้งานระบบครั้งแรก
