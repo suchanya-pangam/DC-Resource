@@ -192,19 +192,19 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
 }
 .timeline-chart { height: 200px; background: repeating-linear-gradient(90deg, #F5F8FC, #F5F8FC 1px, transparent 1px, transparent 40px); border-bottom: 2px solid var(--line); margin-top: 20px; position: relative; }
 .timeline-line { position: absolute; bottom: 42px; left: 0; width: 100%; height: 70px; border-bottom: 3px solid var(--red); border-radius: 50%; }
-.satellite-preview { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; margin: 16px 0; min-height: 260px; }
-.preview-tile { background: linear-gradient(180deg, rgba(59,130,246,0.10), rgba(14,165,233,0.08)); border-radius: 20px; overflow: hidden; display: grid; grid-template-rows: 1fr auto; border: 1px solid rgba(15,23,42,0.08); }
-.tile-swatch { display: flex; align-items: flex-end; justify-content: center; min-height: 180px; padding: 22px 18px 18px; background: rgba(15,23,42,0.95); color: #fff; }
+.satellite-preview { display: grid; grid-template-columns: 1fr 320px; gap: 16px; margin: 16px 0; align-items: start; }
+.preview-tile { background: linear-gradient(180deg, rgba(59,130,246,0.10), rgba(14,165,233,0.08)); border-radius: 20px; overflow: hidden; display: grid; grid-template-rows: 1fr auto; border: 1px solid rgba(15,23,42,0.08); min-height: 220px; }
+.tile-swatch { display: flex; align-items: center; justify-content: center; min-height: 140px; padding: 18px; background: rgba(15,23,42,0.95); color: #fff; }
 .tile-swatch-inner { width: 100%; text-align: center; }
-.tile-caption { padding: 18px 16px 16px; background: #fff; }
+.tile-caption { padding: 14px 12px 16px; background: #fff; display:flex; flex-direction:column; gap:8px; }
 .tile-title { font-size: 13px; font-weight: 700; margin-bottom: 12px; color: #0F172A; }
 .tile-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: rgba(255,255,255,0.85); }
 .tile-big { font-size: 36px; font-weight: 800; line-height: 1.05; margin-top: 16px; }
 .tile-sub { font-size: 12px; opacity: 0.8; margin-top: 10px; }
-.satellite-metric-grid { display: grid; gap: 12px; }
-.metric-card { background: #fff; border: 1px solid #E2E8F0; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; box-shadow: 0 18px 40px rgba(15,23,42,0.04); }
-.metric-label { font-size: 12px; color: #64748B; }
-.metric-value { font-size: 15px; font-weight: 700; color: #0F172A; }
+.satellite-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 12px; align-items: start; }
+.metric-card { background: #fff; border: 1px solid #E2E8F0; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; box-shadow: 0 12px 30px rgba(15,23,42,0.03); min-height:48px; }
+.metric-label { font-size: 12px; color: #64748B; display:block; }
+.metric-value { font-size: 14px; font-weight: 800; color: #0F172A; }
 .metric-pill { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
 .metric-pill.high { background: #fee2e2; color: #b91c1c; }
 .metric-pill.medium { background: #FFF4E6; color: #F97316; }
@@ -398,9 +398,8 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
       </div>
       <div class="hotspot-grid">
         <div class="card">
-          <h3 style="margin-top:0;">Environmental Snapshot</h3>
-          <div class="satellite-preview" id="satellitePreview"></div>
-          <div class="satellite-summary" id="satelliteSummary">Preview of the selected hotspot with latest satellite-derived metrics.</div>
+          <h3 style="margin-top:0;">Infrastructure Impact</h3>
+          <div id="infrastructureImpactCards" style="margin-top:20px; display:grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap:16px;"></div>
           <h3 style="margin-top:24px;" id="timelineChartTitle">Timeline Analysis</h3>
           <div class="timeline-chart" id="timelineChart"></div>
         </div>
@@ -785,12 +784,7 @@ function initHotspotPageControls() {
 }
 
 function renderHotspotPreview(pageData) {
-  const previewElement = document.getElementById('satellitePreview');
-  const summaryElement = document.getElementById('satelliteSummary');
-
   if (!pageData || !pageData.length) {
-    if (previewElement) previewElement.innerHTML = '<div style="padding:24px; color:#64748B;">No preview data available.</div>';
-    if (summaryElement) summaryElement.textContent = 'เลือก facility และปีเพื่อดูข้อมูลสรุป.';
     return;
   }
 
@@ -800,45 +794,42 @@ function renderHotspotPreview(pageData) {
   const lst = Number(latest.mean_LST_C);
   const ndwi = Number(latest.mean_NDWI);
   const moisture = Number(latest.soil_moisture);
+  const ess = Number(latest.ESS_score);
   const dateLabel = latest.year_month;
 
-  const clampByte = (value) => Math.min(255, Math.max(0, value));
-  const ndviColor = `rgba(${clampByte(Math.round(96 + ndvi * 80))}, ${clampByte(Math.round(196 + ndvi * 35))}, ${clampByte(Math.round(88 + ndvi * 25))}, 0.95)`;
-  const ndbiColor = ndbi > 0 ? 'rgba(216,49,69,0.90)' : 'rgba(34,197,94,0.90)';
-  const trueColor = `linear-gradient(135deg, ${ndviColor}, ${ndbiColor})`;
-  let stressStatus;
-  if (latest.risk_level === 'Critical') stressStatus = 'high';
-  else if (latest.risk_level === 'Concern') stressStatus = 'medium';
-  else if (latest.risk_level === 'Watch') stressStatus = 'watch';
-  else stressStatus = 'low';
+  const priorData = pageData.slice(0, Math.max(0, pageData.length - 1));
+  const baselineLST = priorData.length ? priorData.reduce((sum, row) => sum + Number(row.mean_LST_C), 0) / priorData.length : lst;
+  const coolingImpact = baselineLST ? ((lst - baselineLST) / Math.abs(baselineLST)) * 100 : 0;
+  const coolingImpactLabel = `${coolingImpact >= 0 ? '+' : ''}${fmt(coolingImpact)}%`;
+  const waterRisk = ndwi < -0.20 ? 'High' : ndwi < -0.08 ? 'Medium' : 'Low';
+  const stability = latest.risk_level === 'Critical' ? 'Low' : ['Concern', 'Watch'].includes(latest.risk_level) ? 'Moderate' : 'Stable';
+  const suitability = latest.risk_level === 'Watch' ? 'Suitable with mitigation' : (latest.risk_level === 'Critical' ? 'Not suitable' : 'Suitable');
 
-  previewElement.innerHTML = `
-    <div class="preview-tile">
-      <div class="tile-swatch" style="background:${trueColor};">
-        <div class="tile-swatch-inner">
-          <div class="tile-label">Satellite-derived insight</div>
-          <div class="tile-big">${fmt(ndvi)}</div>
-          <div class="tile-sub">Average NDVI</div>
-        </div>
-      </div>
-      <div class="tile-caption">
-        <div class="tile-title">Latest spectral snapshot</div>
-        <div class="metric-card"><span class="metric-label">NDVI</span><span class="metric-value">${fmt(ndvi)}</span></div>
-        <div class="metric-card"><span class="metric-label">NDBI</span><span class="metric-value">${fmt(ndbi)}</span></div>
-        <div class="metric-card"><span class="metric-label">LST</span><span class="metric-value">${fmt(lst)}°C</span></div>
-      </div>
+  const infraHTML = `
+    <div style="background:#FEF2F2; border:1px solid #FECACA; border-radius:12px; padding:18px; box-shadow: 0 10px 24px rgba(254, 226, 226, 0.35);">
+      <div style="font-size:13px; font-weight:700; letter-spacing:0.02em; text-transform: uppercase; color:#991B1B; margin-bottom:10px;">Cooling Load Impact</div>
+      <div style="font-size:28px; font-weight:800; color:#B91C1C; line-height:1;">${coolingImpactLabel}</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:8px;">Relative to facility baseline LST average</div>
     </div>
-    <div class="satellite-metric-grid">
-      <div class="metric-card"><span class="metric-label">Latest period</span><span class="metric-value">${dateLabel}</span></div>
-      <div class="metric-card"><span class="metric-label">Mean NDWI</span><span class="metric-value">${fmt(ndwi)}</span></div>
-      <div class="metric-card"><span class="metric-label">Soil Moisture</span><span class="metric-value">${fmt(moisture)}</span></div>
-      <div class="metric-card"><span class="metric-label">Stress level</span><span class="metric-value"><span class="metric-pill ${stressStatus}">${cleanName(latest.risk_level)}</span></span></div>
+    <div style="background:#EFF6FF; border:1px solid #BFDBFE; border-radius:12px; padding:18px; box-shadow:0 10px 24px rgba(219, 234, 254, 0.55);">
+      <div style="font-size:13px; font-weight:700; letter-spacing:0.02em; text-transform: uppercase; color:#1D4ED8; margin-bottom:10px;">Water Risk</div>
+      <div style="font-size:28px; font-weight:800; color:#1D4ED8; line-height:1;">${waterRisk}</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:8px;">Latest mean NDWI indicates current hydrological stress</div>
+    </div>
+    <div style="background:#ECFDF5; border:1px solid #A7F3D0; border-radius:12px; padding:18px; box-shadow:0 10px 24px rgba(220, 252, 231, 0.55);">
+      <div style="font-size:13px; font-weight:700; letter-spacing:0.02em; text-transform: uppercase; color:#047857; margin-bottom:10px;">Environmental Stability</div>
+      <div style="font-size:28px; font-weight:800; color:#047857; line-height:1;">${stability}</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:8px;">Based on current risk level and ESS conditions</div>
+    </div>
+    <div style="background:#FFFBEB; border:1px solid #FDE68A; border-radius:12px; padding:18px; box-shadow:0 10px 24px rgba(254, 243, 199, 0.55);">
+      <div style="font-size:13px; font-weight:700; letter-spacing:0.02em; text-transform: uppercase; color:#92400E; margin-bottom:10px;">Future Expansion Suitability</div>
+      <div style="font-size:28px; font-weight:800; color:#92400E; line-height:1;">${suitability}</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:8px;">Calculated from active facility risk profile and forecast signals</div>
     </div>
   `;
 
-  if (summaryElement) {
-    summaryElement.textContent = `ณ ${dateLabel}, ${cleanName(latest.data_center_name)} มี NDVI ${fmt(ndvi)}, NDBI ${fmt(ndbi)}, อุณหภูมิ ${fmt(lst)}°C และ soil moisture ${fmt(moisture)}. สถานะความเสี่ยง ${cleanName(latest.risk_level)}.`;
-  }
+  const infraContainer = document.getElementById('infrastructureImpactCards');
+  if (infraContainer) infraContainer.innerHTML = infraHTML;
 }
 
 function renderHotspotPage() {
