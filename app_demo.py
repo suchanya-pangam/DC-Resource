@@ -207,8 +207,8 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
 .metric-value { font-size: 15px; font-weight: 700; color: #0F172A; }
 .metric-pill { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
 .metric-pill.high { background: #fee2e2; color: #b91c1c; }
-.metric-pill.medium { background: #fef3c7; color: #b45309; }
-.metric-pill.low { background: #dcfce7; color: #166534; }
+.metric-pill.medium { background: #FFF4E6; color: #F97316; }
+.metric-pill.low { background: #FEF3C7; color: #B57F1E; }
 .satellite-summary { margin-top: 16px; padding: 16px; border-radius: 16px; background: #eff6ff; color: #0F172A; font-size: 13px; line-height: 1.75; border: 1px solid rgba(59,130,246,0.16); }
 .alerts-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .alerts-table th { text-align: left; padding: 12px; color: var(--muted); border-bottom: 2px solid var(--line); }
@@ -381,7 +381,7 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
         </div>
         <button class="btn-primary">⬇️ Export Analysis</button>
       </div>
-      <div class="card" style="display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:16px; margin-bottom:20px;">
+      <div class="card" style="display:grid; grid-template-columns: repeat(4, minmax(200px, 1fr)); gap:16px; margin-bottom:20px;">
         <div class="input-group">
           <label>Select Facility</label>
           <select id="pageHotspotSelect"></select>
@@ -393,6 +393,10 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
         <div class="input-group">
           <label>Select Year</label>
           <select id="hotspotPageYearSelect"></select>
+        </div>
+        <div class="input-group">
+          <label>Select Month</label>
+          <select id="hotspotPageMonthSelect"></select>
         </div>
       </div>
       <div class="hotspot-grid">
@@ -533,7 +537,8 @@ let state = {
   month: __LATEST_MONTH_JSON__,
   hotspot: null,
   pageMetric: 'mean_LST_C',
-  pageHotspotYear: __LATEST_YEAR_JSON__
+  pageHotspotYear: __LATEST_YEAR_JSON__,
+  pageHotspotMonth: __LATEST_MONTH_JSON__
 };
 
 function cleanName(s) { return String(s || '').replace(/_/g, ' '); }
@@ -764,11 +769,15 @@ function initHotspotPageControls() {
   const facilitySelect = document.getElementById('pageHotspotSelect');
   const metricSelect = document.getElementById('hotspotMetricSelect');
   const yearSelect = document.getElementById('hotspotPageYearSelect');
+  const monthSelect = document.getElementById('hotspotPageMonthSelect');
   const centerNames = [...new Set(DATA.map(r => r.data_center_name))];
 
   facilitySelect.innerHTML = centerNames.map(name => `<option value="${name}" ${state.hotspot===name ? 'selected' : ''}>${cleanName(name)}</option>`).join('');
   metricSelect.innerHTML = PAGE_METRICS.map(m => `<option value="${m.key}" ${state.pageMetric===m.key ? 'selected' : ''}>${m.label}</option>`).join('');
   yearSelect.innerHTML = ['All', ...YEARS].map(y => `<option value="${y}" ${state.pageHotspotYear===y ? 'selected' : ''}>${y}</option>`).join('');
+  // populate month select based on selected year
+  const monthsForYear = ALL_MONTHS.filter(m => m.startsWith(state.pageHotspotYear));
+  monthSelect.innerHTML = ['All', ...monthsForYear].map(m => `<option value="${m}" ${state.pageHotspotMonth===m ? 'selected' : ''}>${m}</option>`).join('');
 
   facilitySelect.onchange = (e) => {
     state.hotspot = e.target.value;
@@ -778,7 +787,15 @@ function initHotspotPageControls() {
     renderMaps(currentData);
   };
   metricSelect.onchange = (e) => { state.pageMetric = e.target.value; renderHotspotPage(); };
-  yearSelect.onchange = (e) => { state.pageHotspotYear = e.target.value; renderHotspotPage(); };
+  yearSelect.onchange = (e) => {
+    state.pageHotspotYear = e.target.value;
+    // refresh months when year changes
+    const months = ALL_MONTHS.filter(m => m.startsWith(state.pageHotspotYear));
+    monthSelect.innerHTML = ['All', ...months].map(m => `<option value="${m}">${m}</option>`).join('');
+    state.pageHotspotMonth = months.length ? months[months.length - 1] : 'All';
+    renderHotspotPage();
+  };
+  monthSelect.onchange = (e) => { state.pageHotspotMonth = e.target.value; renderHotspotPage(); };
 }
 
 function renderHotspotPreview(pageData) {
@@ -841,6 +858,7 @@ function renderHotspotPage() {
   const pageData = DATA
     .filter(r => r.data_center_name === state.hotspot)
     .filter(r => state.pageHotspotYear === 'All' || String(r.Year) === String(state.pageHotspotYear))
+    .filter(r => state.pageHotspotMonth === 'All' || String(r.year_month) === String(state.pageHotspotMonth))
     .sort((a, b) => String(a.year_month).localeCompare(String(b.year_month)));
 
   pageTitle.textContent = `${metricDef.label} Timeline`;
@@ -878,7 +896,7 @@ function renderHotspotPage() {
       <polyline points="${path}" fill="none" stroke="#1268E8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
       ${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#1268E8"></circle>`).join('')}
       ${ticks.map(t => `<text x="${t.x}" y="${height - 10}" fill="#64748B" font-size="10" text-anchor="middle">${t.label}</text>`).join('')}
-      <text x="${padding}" y="${padding - 8}" fill="#0F172A" font-size="11" font-weight="700">${metricDef.label} (${state.pageHotspotYear === 'All' ? 'All years' : state.pageHotspotYear})</text>
+      <text x="${padding}" y="${padding - 8}" fill="#0F172A" font-size="11" font-weight="700">${metricDef.label} (${state.pageHotspotMonth === 'All' ? (state.pageHotspotYear === 'All' ? 'All' : state.pageHotspotYear) : state.pageHotspotMonth})</text>
       <text x="${width - padding}" y="${padding - 8}" fill="#64748B" font-size="10" text-anchor="end">Last: ${fmt(points[points.length-1].value)}</text>
     </svg>
   `;
