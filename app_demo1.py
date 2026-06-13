@@ -207,7 +207,8 @@ td { padding: 8px; border-bottom: 1px solid #F0F4F8; vertical-align: middle; }
 .metric-value { font-size: 15px; font-weight: 700; color: #0F172A; }
 .metric-pill { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
 .metric-pill.high { background: #fee2e2; color: #b91c1c; }
-.metric-pill.medium { background: #fef3c7; color: #b45309; }
+.metric-pill.medium { background: #FFF4E6; color: #F97316; }
+.metric-pill.watch { background: #FEF3C7; color: #B57F1E; }
 .metric-pill.low { background: #dcfce7; color: #166534; }
 .satellite-summary { margin-top: 16px; padding: 16px; border-radius: 16px; background: #eff6ff; color: #0F172A; font-size: 13px; line-height: 1.75; border: 1px solid rgba(59,130,246,0.16); }
 .alerts-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -533,7 +534,8 @@ let state = {
   month: __LATEST_MONTH_JSON__,
   hotspot: null,
   pageMetric: 'mean_LST_C',
-  pageHotspotYear: __LATEST_YEAR_JSON__
+  pageHotspotYear: __LATEST_YEAR_JSON__,
+  
 };
 
 function cleanName(s) { return String(s || '').replace(/_/g, ' '); }
@@ -769,6 +771,7 @@ function initHotspotPageControls() {
   facilitySelect.innerHTML = centerNames.map(name => `<option value="${name}" ${state.hotspot===name ? 'selected' : ''}>${cleanName(name)}</option>`).join('');
   metricSelect.innerHTML = PAGE_METRICS.map(m => `<option value="${m.key}" ${state.pageMetric===m.key ? 'selected' : ''}>${m.label}</option>`).join('');
   yearSelect.innerHTML = ['All', ...YEARS].map(y => `<option value="${y}" ${state.pageHotspotYear===y ? 'selected' : ''}>${y}</option>`).join('');
+  
 
   facilitySelect.onchange = (e) => {
     state.hotspot = e.target.value;
@@ -803,7 +806,11 @@ function renderHotspotPreview(pageData) {
   const ndviColor = `rgba(${clampByte(Math.round(96 + ndvi * 80))}, ${clampByte(Math.round(196 + ndvi * 35))}, ${clampByte(Math.round(88 + ndvi * 25))}, 0.95)`;
   const ndbiColor = ndbi > 0 ? 'rgba(216,49,69,0.90)' : 'rgba(34,197,94,0.90)';
   const trueColor = `linear-gradient(135deg, ${ndviColor}, ${ndbiColor})`;
-  const stressStatus = latest.risk_level === 'Critical' ? 'high' : latest.risk_level === 'Concern' ? 'medium' : 'low';
+  let stressStatus;
+  if (latest.risk_level === 'Critical') stressStatus = 'high';
+  else if (latest.risk_level === 'Concern') stressStatus = 'medium';
+  else if (latest.risk_level === 'Watch') stressStatus = 'watch';
+  else stressStatus = 'low';
 
   previewElement.innerHTML = `
     <div class="preview-tile">
