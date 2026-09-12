@@ -1,0 +1,5 @@
+# Tested with Python 3.12 (see runtime.txt for deployment)
+streamlit==1.50.0
+pandas==2.3.3
+plotly==7.0.0
+numpy==2.4.2

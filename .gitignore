@@ -1,0 +1,32 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+
+# Local virtual environments
+env/
+.venv/
+venv/
+
+# Streamlit local settings and secrets
+.streamlit/secrets.toml
+
+# Environment files and local runtime artifacts
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.bak
+*.sqlite
+*.sqlite3
+
+# Local notes
+คำสั่ง.txt
+
+# Superseded dashboard iterations (keep only app_demo2.py in the repository)
+app.py
+app_demo.py
+app_demo1.py
+
+# Operating system files
+.DS_Store
