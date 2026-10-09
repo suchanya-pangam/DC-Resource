@@ -2,6 +2,8 @@
 
 This is a student GeoAI Hackathon project completed as part of a Data Science BootCamp. It is a UI demo prototype for a future environmental-monitoring concept around anonymised U.S. locations. My contribution focused on turning prepared satellite-derived indicators and scores into an interactive Streamlit dashboard.
 
+**Award:** Winner, Data Science BootCamp 2026 (GeoAI Hackathon), Faculty of Science, Chiang Mai University
+
 ## Project Highlights
 
 - Explores monthly environmental conditions at 10 anonymised demonstration locations from 2020 to 2026.
@@ -61,6 +63,14 @@ In a future implementation, regularly updated satellite data could feed the same
 ## Live Dashboard
 
 Explore the interactive Streamlit dashboard here: [Open DC-Resource Intelligence Platform](https://dc-resource-e3tvpyepky7plk8expnpbz.streamlit.app).
+
+<!-- Live Demo: [link] -->
+
+## Screenshots
+
+![Dashboard overview](assets/dashboard-overview.png)
+
+Overview dashboard showing environmental indicators and hotspot comparisons.
 
 ## Data
 
